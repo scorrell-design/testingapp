@@ -1,5 +1,3 @@
--- Run this in the Supabase SQL Editor to set up the database
-
 CREATE TABLE testers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
