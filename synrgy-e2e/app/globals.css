@@ -18,6 +18,21 @@
   --color-scenario-teal-light: #E1F5EE;
   --color-scenario-coral: #993C1D;
   --color-scenario-coral-light: #FAECE7;
+  --color-scenario-pink: #993556;
+  --color-scenario-pink-light: #FBEAF0;
+  --color-scenario-navy: #0C447C;
+  --color-scenario-navy-light: #E6F1FB;
+  --color-scenario-indigo: #3C3489;
+  --color-scenario-indigo-light: #EEEDFE;
+
+  --color-path-core: #6b7280;
+  --color-path-core-light: #f3f4f6;
+  --color-path-a: #dc2626;
+  --color-path-a-light: #fef2f2;
+  --color-path-b: #7c3aed;
+  --color-path-b-light: #f5f3ff;
+  --color-path-c: #d97706;
+  --color-path-c-light: #fffbeb;
 
   --color-status-pass: #0F6E56;
   --color-status-pass-light: #E1F5EE;

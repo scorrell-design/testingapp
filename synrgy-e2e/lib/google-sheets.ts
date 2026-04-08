@@ -78,7 +78,7 @@ function buildCheckpointRows(): string[][] {
   for (const scenario of scenarios) {
     for (const step of scenario.steps) {
       for (const check of step.checks) {
-        rows.push([check.id, scenario.title, step.title, check.text, "", "", ""]);
+        rows.push([check.id, scenario.title, step.title, check.text, "", "", "", step.path.toUpperCase()]);
       }
     }
   }
@@ -166,7 +166,7 @@ export async function ensureTesterTab(
   if (newSheetId === null) return;
 
   const header = [
-    ["Checkpoint ID", "Scenario", "Step", "Checkpoint", "Status", "Updated", "Notes"],
+    ["Checkpoint ID", "Scenario", "Step", "Checkpoint", "Status", "Updated", "Notes", "Path"],
   ];
   const dataRows = buildCheckpointRows();
 
@@ -255,6 +255,13 @@ export async function ensureTesterTab(
             updateDimensionProperties: {
               range: { sheetId: newSheetId, dimension: "COLUMNS", startIndex: 6, endIndex: 7 },
               properties: { pixelSize: 220 },
+              fields: "pixelSize",
+            },
+          },
+          {
+            updateDimensionProperties: {
+              range: { sheetId: newSheetId, dimension: "COLUMNS", startIndex: 7, endIndex: 8 },
+              properties: { pixelSize: 80 },
               fields: "pixelSize",
             },
           },
