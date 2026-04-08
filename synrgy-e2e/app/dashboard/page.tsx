@@ -7,6 +7,7 @@ import type { Path } from "@/lib/scenarios";
 import ScenarioCard from "@/components/ScenarioCard";
 import StatCard from "@/components/StatCard";
 import PathAssignment from "@/components/PathAssignment";
+import DeviceManager from "@/components/DeviceManager";
 
 type Tester = { id: string; name: string; email: string };
 type ResultMap = Record<string, { status: string; notes: string | null; updated_at: string }>;
@@ -19,6 +20,8 @@ export default function DashboardPage() {
   const [showAllPaths, setShowAllPaths] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showReset, setShowReset] = useState(false);
+  const [currentRound, setCurrentRound] = useState(1);
+  const [startingNewRound, setStartingNewRound] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -28,12 +31,14 @@ export default function DashboardPage() {
       }),
       fetch("/api/results").then((r) => r.json()),
       fetch("/api/paths").then((r) => r.json()),
+      fetch("/api/round").then((r) => r.json()),
     ])
-      .then(([authData, resultsData, pathsData]) => {
+      .then(([authData, resultsData, pathsData, roundData]) => {
         setTester(authData.tester);
         setResults(resultsData.results ?? {});
         const paths = pathsData.paths ?? [];
         setAssignedPaths(["core", ...paths] as Path[]);
+        setCurrentRound(roundData.current_round ?? 1);
       })
       .catch(() => {
         router.push("/login");
@@ -50,6 +55,24 @@ export default function DashboardPage() {
     await fetch("/api/results/all", { method: "DELETE" });
     setResults({});
     setShowReset(false);
+  }, []);
+
+  const handleStartNewRound = useCallback(async () => {
+    setStartingNewRound(true);
+    try {
+      const res = await fetch("/api/round", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentRound(data.current_round);
+        const resultsRes = await fetch("/api/results");
+        const resultsData = await resultsRes.json();
+        setResults(resultsData.results ?? {});
+      }
+    } catch {
+      // silent
+    } finally {
+      setStartingNewRound(false);
+    }
   }, []);
 
   if (loading) {
@@ -69,8 +92,12 @@ export default function DashboardPage() {
   );
   const totalChecks = relevantCheckIds.length;
   const tested = relevantCheckIds.filter((id) => results[id]).length;
-  const passed = relevantCheckIds.filter((id) => results[id]?.status === "pass").length;
-  const failed = relevantCheckIds.filter((id) => results[id]?.status === "fail").length;
+  const passed = relevantCheckIds.filter(
+    (id) => results[id]?.status === "pass" || results[id]?.status === "retest_pass"
+  ).length;
+  const failed = relevantCheckIds.filter(
+    (id) => results[id]?.status === "fail" || results[id]?.status === "retest_fail"
+  ).length;
   const blocked = relevantCheckIds.filter((id) => results[id]?.status === "blocked").length;
 
   return (
@@ -87,7 +114,12 @@ export default function DashboardPage() {
             </h1>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">{tester?.name}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">{tester?.name}</span>
+              <span className="inline-flex items-center rounded-full bg-brand-navy/10 px-2 py-0.5 text-[10px] font-semibold text-brand-navy">
+                Round {currentRound}
+              </span>
+            </div>
             <button
               onClick={handleSignOut}
               className="text-xs text-gray-400 hover:text-gray-600"
@@ -99,9 +131,10 @@ export default function DashboardPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-        {/* Path assignment */}
-        <div className="mb-6">
+        {/* Device manager + Path assignment row */}
+        <div className="mb-6 grid gap-4 lg:grid-cols-2">
           <PathAssignment />
+          <DeviceManager />
         </div>
 
         {/* Global stats */}
@@ -135,12 +168,21 @@ export default function DashboardPage() {
               {showAllPaths ? "Showing all paths" : "Showing my paths"}
             </button>
           </div>
-          <button
-            onClick={() => setShowReset(true)}
-            className="text-xs text-gray-400 hover:text-status-fail"
-          >
-            Reset all progress
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleStartNewRound}
+              disabled={startingNewRound}
+              className="rounded-full border border-brand-navy/30 bg-brand-navy/5 px-3 py-1 text-xs font-medium text-brand-navy transition-colors hover:bg-brand-navy/10 disabled:opacity-50"
+            >
+              {startingNewRound ? "Starting…" : `Start Round ${currentRound + 1}`}
+            </button>
+            <button
+              onClick={() => setShowReset(true)}
+              className="text-xs text-gray-400 hover:text-status-fail"
+            >
+              Reset all progress
+            </button>
+          </div>
         </div>
 
         {/* Reset confirmation */}

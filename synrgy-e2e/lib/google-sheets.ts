@@ -78,7 +78,7 @@ function buildCheckpointRows(): string[][] {
   for (const scenario of scenarios) {
     for (const step of scenario.steps) {
       for (const check of step.checks) {
-        rows.push([check.id, scenario.title, step.title, check.text, "", "", "", step.path.toUpperCase()]);
+        rows.push([check.id, scenario.title, step.title, check.text, "", "", "", step.path.toUpperCase(), check.expected ?? ""]);
       }
     }
   }
@@ -126,6 +126,26 @@ function statusColors(status: string): {
       bg: { red: 0.945, green: 0.937, blue: 0.91 },
       fg: { red: 0.373, green: 0.369, blue: 0.353 },
     },
+    ACKNOWLEDGED: {
+      bg: { red: 0.902, green: 0.945, blue: 0.984 },
+      fg: { red: 0.102, green: 0.373, blue: 0.706 },
+    },
+    FIX_IN_PROGRESS: {
+      bg: { red: 0.941, green: 0.922, blue: 0.996 },
+      fg: { red: 0.424, green: 0.231, blue: 0.667 },
+    },
+    READY_FOR_RETEST: {
+      bg: { red: 0.996, green: 0.953, blue: 0.835 },
+      fg: { red: 0.651, green: 0.42, blue: 0.039 },
+    },
+    RETEST_PASS: {
+      bg: { red: 0.882, green: 0.961, blue: 0.933 },
+      fg: { red: 0.059, green: 0.431, blue: 0.337 },
+    },
+    RETEST_FAIL: {
+      bg: { red: 0.988, green: 0.922, blue: 0.922 },
+      fg: { red: 0.639, green: 0.176, blue: 0.176 },
+    },
   };
   return map[status.toUpperCase()] ?? null;
 }
@@ -166,7 +186,7 @@ export async function ensureTesterTab(
   if (newSheetId === null) return;
 
   const header = [
-    ["Checkpoint ID", "Scenario", "Step", "Checkpoint", "Status", "Updated", "Notes", "Path"],
+    ["Checkpoint ID", "Scenario", "Step", "Checkpoint", "Status", "Updated", "Notes", "Path", "Expected Result"],
   ];
   const dataRows = buildCheckpointRows();
 
