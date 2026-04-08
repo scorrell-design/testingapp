@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { setTesterCookie } from "@/lib/auth";
+import { ensureTesterTab } from "@/lib/google-sheets";
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,6 +54,10 @@ export async function POST(request: NextRequest) {
     }
 
     await setTesterCookie(tester!.id);
+
+    ensureTesterTab(tester!.name, tester!.email).catch((err) =>
+      console.error("Failed to create Sheets tab for tester:", err)
+    );
 
     return NextResponse.json({ tester });
   } catch {
