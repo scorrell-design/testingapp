@@ -6,13 +6,32 @@ import Link from "next/link";
 import { scenarios, getScenarioCheckCount, getCheckIdsForPaths } from "@/lib/scenarios";
 import type { Scenario, Path } from "@/lib/scenarios";
 import StepPill from "@/components/StepPill";
-import CheckpointCard from "@/components/CheckpointCard";
+import CheckpointCardExpanded from "@/components/testing/CheckpointCardExpanded";
+import type { ResultData } from "@/components/testing/CheckpointCardExpanded";
 import ProgressBar from "@/components/ProgressBar";
 import StepNotes from "@/components/StepNotes";
 import PathBadge from "@/components/PathBadge";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
-type ResultData = { status: string; notes: string | null; updated_at: string };
 type ResultMap = Record<string, ResultData>;
+type AllRoundResult = {
+  check_id: string;
+  status: string;
+  updated_at: string;
+  round: number;
+  severity?: string | null;
+  defect_description?: string | null;
+};
+
+type RetestRequest = {
+  id: string;
+  check_id: string;
+  reason: string;
+  what_to_verify: string;
+  original_notes: string | null;
+  status: string;
+  requester: { name: string } | null;
+};
 
 export default function ScenarioPage({
   params,
@@ -22,9 +41,15 @@ export default function ScenarioPage({
   const { id } = use(params);
   const router = useRouter();
   const [results, setResults] = useState<ResultMap>({});
+  const [allRoundResults, setAllRoundResults] = useState<AllRoundResult[]>([]);
+  const [previousRoundResults, setPreviousRoundResults] = useState<
+    Record<string, { status: string; round: number }>
+  >({});
   const [assignedPaths, setAssignedPaths] = useState<Path[]>(["core"]);
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [currentRound, setCurrentRound] = useState(1);
+  const [retestRequests, setRetestRequests] = useState<RetestRequest[]>([]);
 
   const scenario: Scenario | undefined = scenarios.find((s) => s.id === id);
 
@@ -35,12 +60,20 @@ export default function ScenarioPage({
         return r.json();
       }),
       fetch("/api/results").then((r) => r.json()),
+      fetch("/api/results?all_rounds=true").then((r) => r.json()),
       fetch("/api/paths").then((r) => r.json()),
+      fetch("/api/retests/mine").then((r) => r.ok ? r.json() : { requests: [] }),
     ])
-      .then(([, resultsData, pathsData]) => {
+      .then(([, resultsData, allRoundsData, pathsData, retestData]) => {
         setResults(resultsData.results ?? {});
+        setCurrentRound(resultsData.current_round ?? 1);
+        setPreviousRoundResults(resultsData.previous_round_results ?? {});
+        setAllRoundResults(allRoundsData.results ?? []);
         const paths = pathsData.paths ?? [];
         setAssignedPaths(["core", ...paths] as Path[]);
+        setRetestRequests(
+          (retestData.requests ?? []).filter((r: RetestRequest) => r.status === "pending")
+        );
       })
       .catch(() => {
         router.push("/login");
@@ -49,7 +82,11 @@ export default function ScenarioPage({
   }, [router]);
 
   const handleStatusChange = useCallback(
-    async (checkId: string, status: string | null, notes?: string) => {
+    async (
+      checkId: string,
+      status: string | null,
+      extra?: { notes?: string; severity?: string; defect_description?: string }
+    ) => {
       if (status === null) {
         setResults((prev) => {
           const next = { ...prev };
@@ -65,17 +102,58 @@ export default function ScenarioPage({
         const now = new Date().toISOString();
         setResults((prev) => ({
           ...prev,
-          [checkId]: { status, notes: notes ?? null, updated_at: now },
+          [checkId]: {
+            status,
+            notes: extra?.notes ?? prev[checkId]?.notes ?? null,
+            updated_at: now,
+            round: currentRound,
+            severity: extra?.severity ?? prev[checkId]?.severity ?? null,
+            defect_description: extra?.defect_description ?? prev[checkId]?.defect_description ?? null,
+          },
         }));
         fetch("/api/results", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ check_id: checkId, status, notes }),
+          body: JSON.stringify({
+            check_id: checkId,
+            status,
+            notes: extra?.notes,
+            severity: extra?.severity,
+            defect_description: extra?.defect_description,
+          }),
         });
       }
     },
+    [currentRound]
+  );
+
+  const handleRetestComplete = useCallback(
+    async (requestId: string, retestResult: "pass" | "fail", retestNotes: string) => {
+      await fetch(`/api/retests/${requestId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retest_result: retestResult, retest_notes: retestNotes }),
+      });
+      setRetestRequests((prev) => prev.filter((r) => r.id !== requestId));
+      const resultsRes = await fetch("/api/results");
+      const resultsData = await resultsRes.json();
+      setResults(resultsData.results ?? {});
+    },
     []
   );
+
+  function getCheckHistory(checkId: string) {
+    const entries = allRoundResults
+      .filter((r) => r.check_id === checkId)
+      .map((r) => ({
+        round: r.round,
+        status: r.status,
+        updated_at: r.updated_at,
+        severity: r.severity,
+        defect_description: r.defect_description,
+      }));
+    return entries.length > 0 ? entries : undefined;
+  }
 
   if (!scenario) {
     return (
@@ -101,7 +179,9 @@ export default function ScenarioPage({
   const relevantCheckIds = getCheckIdsForPaths(scenario, assignedPaths);
   const totalChecks = relevantCheckIds.length;
   const tested = relevantCheckIds.filter((id) => results[id]).length;
-  const failed = relevantCheckIds.filter((id) => results[id]?.status === "fail").length;
+  const failed = relevantCheckIds.filter(
+    (id) => results[id]?.status === "fail" || results[id]?.status === "retest_fail"
+  ).length;
   const percent = totalChecks > 0 ? (tested / totalChecks) * 100 : 0;
 
   const totalAll = getScenarioCheckCount(scenario);
@@ -116,15 +196,18 @@ export default function ScenarioPage({
       {/* Header */}
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6">
-          <Link
-            href="/dashboard"
-            className="mb-3 inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
-          >
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to dashboard
-          </Link>
+          <div className="mb-3 flex items-center justify-between">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to dashboard
+            </Link>
+            <NotificationBell />
+          </div>
 
           <div className="flex items-start gap-3">
             <div
@@ -134,7 +217,12 @@ export default function ScenarioPage({
               {scenario.icon}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-gray-400">{scenario.persona}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-400">{scenario.persona}</p>
+                <span className="inline-flex items-center rounded-full bg-brand-navy/10 px-2 py-0.5 text-[10px] font-semibold text-brand-navy">
+                  Round {currentRound}
+                </span>
+              </div>
               <h1 className="text-lg font-semibold text-gray-900">
                 {scenario.title}
               </h1>
@@ -212,15 +300,34 @@ export default function ScenarioPage({
           className="space-y-3"
           style={{ opacity: isStepAssigned ? 1 : 0.6 }}
         >
-          {step.checks.map((check) => (
-            <CheckpointCard
-              key={check.id}
-              checkId={check.id}
-              text={check.text}
-              result={results[check.id]}
-              onStatusChange={handleStatusChange}
-            />
-          ))}
+          {step.checks.map((check, checkIdx) => {
+            const retestReq = retestRequests.find((r) => r.check_id === check.id);
+            return (
+              <CheckpointCardExpanded
+                key={check.id}
+                check={check}
+                result={results[check.id]}
+                currentRound={currentRound}
+                history={getCheckHistory(check.id)}
+                previousRoundResult={
+                  previousRoundResults[check.id]
+                    ? {
+                        status: previousRoundResults[check.id].status,
+                        round: previousRoundResults[check.id].round,
+                        notes: null,
+                        updated_at: "",
+                      }
+                    : undefined
+                }
+                onStatusChange={handleStatusChange}
+                allResults={results}
+                retestRequest={retestReq}
+                onRetestComplete={handleRetestComplete}
+                stepIndex={checkIdx}
+                totalInStep={step.checks.length}
+              />
+            );
+          })}
         </div>
 
         {/* Step notes */}

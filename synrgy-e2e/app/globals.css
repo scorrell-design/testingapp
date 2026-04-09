@@ -34,6 +34,7 @@
   --color-path-c: #d97706;
   --color-path-c-light: #fffbeb;
 
+  /* Tester statuses */
   --color-status-pass: #0F6E56;
   --color-status-pass-light: #E1F5EE;
   --color-status-pass-border: #5DCAA5;
@@ -46,6 +47,23 @@
   --color-status-skip: #5F5E5A;
   --color-status-skip-light: #F1EFE8;
   --color-status-skip-border: #B4B2A9;
+
+  /* Defect lifecycle statuses */
+  --color-status-acknowledged: #1A5FB4;
+  --color-status-acknowledged-light: #E6F1FB;
+  --color-status-acknowledged-border: #6AACF0;
+  --color-status-fix: #6C3BAA;
+  --color-status-fix-light: #F0EBFE;
+  --color-status-fix-border: #B49AE8;
+  --color-status-retest: #A66B0A;
+  --color-status-retest-light: #FEF3D5;
+  --color-status-retest-border: #F5C842;
+  --color-status-retest-pass: #0F6E56;
+  --color-status-retest-pass-light: #E1F5EE;
+  --color-status-retest-pass-border: #5DCAA5;
+  --color-status-retest-fail: #A32D2D;
+  --color-status-retest-fail-light: #FCEBEB;
+  --color-status-retest-fail-border: #F09595;
 }
 
 body {

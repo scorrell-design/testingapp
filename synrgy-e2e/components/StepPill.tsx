@@ -7,16 +7,19 @@ type ResultMap = Record<string, { status: string }>;
 
 type StepStatus = "incomplete" | "allPass" | "hasFail";
 
+const FAIL_STATUSES = ["fail", "retest_fail"];
+const PASS_STATUSES = ["pass", "retest_pass"];
+
 function getStepStatus(step: Step, results: ResultMap): StepStatus {
   const checkIds = step.checks.map((c) => c.id);
   const tested = checkIds.filter((id) => results[id]);
   if (tested.length === 0) return "incomplete";
 
-  const hasFail = checkIds.some((id) => results[id]?.status === "fail");
+  const hasFail = checkIds.some((id) => FAIL_STATUSES.includes(results[id]?.status));
   if (hasFail) return "hasFail";
 
   const allTested = tested.length === checkIds.length;
-  const allPass = checkIds.every((id) => results[id]?.status === "pass");
+  const allPass = checkIds.every((id) => PASS_STATUSES.includes(results[id]?.status));
   if (allTested && allPass) return "allPass";
 
   return "incomplete";

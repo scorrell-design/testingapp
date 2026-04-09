@@ -30,10 +30,10 @@ export async function getCurrentTester() {
 
   const { data, error } = await supabase
     .from("testers")
-    .select("id, name, email")
+    .select("id, name, email, role")
     .eq("id", testerId)
     .single();
 
   if (error || !data) return null;
-  return data;
+  return data as { id: string; name: string; email: string; role: string };
 }

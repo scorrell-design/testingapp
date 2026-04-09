@@ -1,0 +1,10 @@
+[build]
+  base = "synrgy-e2e"
+  command = "npm install && node node_modules/next/dist/bin/next build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
