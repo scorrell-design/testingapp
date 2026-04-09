@@ -7,8 +7,6 @@ import { scenarios, getCheckIdsForPaths } from "@/lib/scenarios";
 import type { Path } from "@/lib/scenarios";
 import ScenarioCard from "@/components/ScenarioCard";
 import StatCard from "@/components/StatCard";
-import PathAssignment from "@/components/PathAssignment";
-import DeviceManager from "@/components/DeviceManager";
 import NotificationBell from "@/components/notifications/NotificationBell";
 
 type Tester = { id: string; name: string; email: string; role?: string };
@@ -25,7 +23,6 @@ export default function DashboardPage() {
   const [tester, setTester] = useState<Tester | null>(null);
   const [results, setResults] = useState<ResultMap>({});
   const [assignedPaths, setAssignedPaths] = useState<Path[]>(["core"]);
-  const [showAllPaths, setShowAllPaths] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showReset, setShowReset] = useState(false);
   const [currentRound, setCurrentRound] = useState(1);
@@ -100,12 +97,16 @@ export default function DashboardPage() {
     );
   }
 
-  const activePaths: Path[] = showAllPaths
-    ? ["core", "path-a", "path-b", "path-c"]
-    : assignedPaths;
+  const isAdmin = tester?.role === "admin";
 
-  const relevantCheckIds = scenarios.flatMap((s) =>
-    getCheckIdsForPaths(s, activePaths)
+  const assignedScenarios = scenarios.filter((s) =>
+    myAssignments.some((a) => a.scenario_id === s.id)
+  );
+
+  const displayScenarios = isAdmin ? scenarios : assignedScenarios;
+
+  const relevantCheckIds = displayScenarios.flatMap((s) =>
+    getCheckIdsForPaths(s, assignedPaths)
   );
   const totalChecks = relevantCheckIds.length;
   const tested = relevantCheckIds.filter((id) => results[id]).length;
@@ -142,7 +143,7 @@ export default function DashboardPage() {
                 </span>
               </Link>
             )}
-            {tester?.role === "admin" && (
+            {isAdmin && (
               <Link
                 href="/admin"
                 className="rounded-full border border-brand-navy/20 bg-brand-navy/5 px-3 py-1 text-xs font-medium text-brand-navy hover:bg-brand-navy/10"
@@ -171,59 +172,39 @@ export default function DashboardPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-        {/* Device manager + Path assignment row */}
-        <div className="mb-6 grid gap-4 lg:grid-cols-2">
-          <PathAssignment />
-          <DeviceManager />
-        </div>
-
-        {/* Global stats */}
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Tested" value={`${tested}/${totalChecks}`} />
-          <StatCard label="Passed" value={passed} color="#0F6E56" />
-          <StatCard label="Failed" value={failed} color="#A32D2D" />
-          <StatCard label="Blocked" value={blocked} color="#854F0B" />
-        </div>
+        {/* Stats — only shown when tester has assignments or is admin */}
+        {displayScenarios.length > 0 && (
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="Tested" value={`${tested}/${totalChecks}`} />
+            <StatCard label="Passed" value={passed} color="#0F6E56" />
+            <StatCard label="Failed" value={failed} color="#A32D2D" />
+            <StatCard label="Blocked" value={blocked} color="#854F0B" />
+          </div>
+        )}
 
         {/* Actions row */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-gray-700">Scenarios</h2>
-            <button
-              onClick={() => setShowAllPaths(!showAllPaths)}
-              className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
-              style={
-                showAllPaths
-                  ? {
-                      borderColor: "#1A3A5C",
-                      backgroundColor: "#1A3A5C10",
-                      color: "#1A3A5C",
-                    }
-                  : {
-                      borderColor: "#e5e7eb",
-                      color: "#6b7280",
-                    }
-              }
-            >
-              {showAllPaths ? "Showing all paths" : "Showing my paths"}
-            </button>
+        {displayScenarios.length > 0 && (
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">
+              {isAdmin ? "All Scenarios" : "Your Assigned Scenarios"}
+            </h2>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleStartNewRound}
+                disabled={startingNewRound}
+                className="rounded-full border border-brand-navy/30 bg-brand-navy/5 px-3 py-1 text-xs font-medium text-brand-navy transition-colors hover:bg-brand-navy/10 disabled:opacity-50"
+              >
+                {startingNewRound ? "Starting…" : `Start Round ${currentRound + 1}`}
+              </button>
+              <button
+                onClick={() => setShowReset(true)}
+                className="text-xs text-gray-400 hover:text-status-fail"
+              >
+                Reset all progress
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleStartNewRound}
-              disabled={startingNewRound}
-              className="rounded-full border border-brand-navy/30 bg-brand-navy/5 px-3 py-1 text-xs font-medium text-brand-navy transition-colors hover:bg-brand-navy/10 disabled:opacity-50"
-            >
-              {startingNewRound ? "Starting…" : `Start Round ${currentRound + 1}`}
-            </button>
-            <button
-              onClick={() => setShowReset(true)}
-              className="text-xs text-gray-400 hover:text-status-fail"
-            >
-              Reset all progress
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Reset confirmation */}
         {showReset && (
@@ -246,51 +227,51 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Assignment info */}
-        {myAssignments.length > 0 && (
-          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-            <p className="text-xs text-blue-700">
-              You have {myAssignments.length} assigned scenario{myAssignments.length > 1 ? "s" : ""}. Showing assigned scenarios first.
+        {/* Empty state for testers with no assignments */}
+        {!isAdmin && displayScenarios.length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white px-6 py-16 text-center">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100">
+              <svg className="h-7 w-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+              </svg>
+            </div>
+            <h3 className="mb-2 text-base font-semibold text-gray-900">No test scenarios assigned yet</h3>
+            <p className="max-w-sm text-sm text-gray-500">
+              Your admin will assign you testing paths — you&apos;ll get an email when it&apos;s time to start.
             </p>
           </div>
         )}
 
         {/* Scenario cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(myAssignments.length > 0
-            ? [
-                ...scenarios.filter((s) => myAssignments.some((a) => a.scenario_id === s.id)),
-                ...scenarios.filter((s) => !myAssignments.some((a) => a.scenario_id === s.id)),
-              ]
-            : scenarios
-          ).map((scenario, i) => {
-            const assignment = myAssignments.find((a) => a.scenario_id === scenario.id);
-            const isAssigned = !!assignment;
-            const isUnassigned = myAssignments.length > 0 && !isAssigned;
-            return (
-              <div key={scenario.id} style={{ opacity: isUnassigned ? 0.5 : 1 }}>
-                {assignment && (
-                  <div className="mb-1 flex items-center gap-1 px-1">
-                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
-                      {assignment.persona}
-                    </span>
-                    {assignment.assigner?.name && (
-                      <span className="text-[10px] text-gray-400">
-                        Assigned by {assignment.assigner.name}
+        {displayScenarios.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {displayScenarios.map((scenario, i) => {
+              const assignment = myAssignments.find((a) => a.scenario_id === scenario.id);
+              return (
+                <div key={scenario.id}>
+                  {assignment && (
+                    <div className="mb-1 flex items-center gap-1 px-1">
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                        {assignment.persona}
                       </span>
-                    )}
-                  </div>
-                )}
-                <ScenarioCard
-                  scenario={scenario}
-                  index={i}
-                  results={results}
-                  assignedPaths={activePaths}
-                />
-              </div>
-            );
-          })}
-        </div>
+                      {assignment.assigner?.name && (
+                        <span className="text-[10px] text-gray-400">
+                          Assigned by {assignment.assigner.name}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <ScenarioCard
+                    scenario={scenario}
+                    index={i}
+                    results={results}
+                    assignedPaths={assignedPaths}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </main>
     </div>
   );

@@ -75,9 +75,11 @@ export async function POST(request: NextRequest) {
     sendRetestEmail({
       testerEmail: targetTester.email,
       testerName: targetTester.name,
+      adminName: admin!.name,
       checkpointText: checkText,
       reason,
       whatToVerify: what_to_verify,
+      originalNotes: original_notes || null,
       appLink: `${process.env.NEXT_PUBLIC_APP_URL || ""}${appLink}`,
     }).catch((err) => console.error("Email send failed:", err));
 

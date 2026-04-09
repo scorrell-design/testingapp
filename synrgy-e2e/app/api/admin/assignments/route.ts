@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin-guard";
+import { sendAssignmentEmail, createNotification } from "@/lib/notifications";
+import { scenarios } from "@/lib/scenarios";
 
 export async function GET() {
   const { error, tester } = await requireAdmin();
@@ -76,6 +78,26 @@ export async function POST(request: NextRequest) {
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  for (const sid of scenario_ids as string[]) {
+    const scenario = scenarios.find((s) => s.id === sid);
+    const scenarioTitle = scenario?.title || sid;
+
+    sendAssignmentEmail({
+      testerEmail: targetTester!.email,
+      testerName: targetTester!.name,
+      scenarioTitle,
+      adminNotes: notes || null,
+    }).catch((err) => console.error("Assignment email failed:", err));
+
+    createNotification({
+      testerId: targetTester!.id,
+      type: "assignment",
+      title: `New assignment: ${scenarioTitle}`,
+      body: `${tester!.name} assigned you to test "${scenarioTitle}"${notes ? `. Notes: ${notes}` : ""}`,
+      link: `/scenario/${sid}`,
+    }).catch((err) => console.error("Assignment notification failed:", err));
   }
 
   return NextResponse.json({ assignments: data ?? [] });
