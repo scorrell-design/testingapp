@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { scenarios } from "@/lib/scenarios";
 import type { Scenario } from "@/lib/scenarios";
@@ -40,6 +40,7 @@ export default function ScenarioPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [results, setResults] = useState<ResultMap>({});
   const [allRoundResults, setAllRoundResults] = useState<AllRoundResult[]>([]);
   const [previousRoundResults, setPreviousRoundResults] = useState<
@@ -49,10 +50,29 @@ export default function ScenarioPage({
   const [loading, setLoading] = useState(true);
   const [currentRound, setCurrentRound] = useState(1);
   const [retestRequests, setRetestRequests] = useState<RetestRequest[]>([]);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [finalNotes, setFinalNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const retestCheckId = searchParams.get("check");
+  const isRetestMode = searchParams.get("retest") === "true";
+
+  useEffect(() => {
+    if (retestCheckId && !loading) {
+      setTimeout(() => {
+        const el = document.getElementById(`check-${retestCheckId}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    }
+  }, [retestCheckId, loading]);
 
   const scenario: Scenario | undefined = scenarios.find((s) => s.id === id);
 
   useEffect(() => {
+    const stepParam = searchParams.get("step");
+    if (stepParam) setActiveStep(parseInt(stepParam) || 0);
+
     Promise.all([
       fetch("/api/auth/me").then((r) => {
         if (!r.ok) throw new Error("Not auth");
@@ -61,8 +81,9 @@ export default function ScenarioPage({
       fetch("/api/results").then((r) => r.json()),
       fetch("/api/results?all_rounds=true").then((r) => r.json()),
       fetch("/api/retests/mine").then((r) => r.ok ? r.json() : { requests: [] }),
+      fetch("/api/scenario-completions").then((r) => r.ok ? r.json() : { completions: [] }),
     ])
-      .then(([, resultsData, allRoundsData, retestData]) => {
+      .then(([, resultsData, allRoundsData, retestData, completionsData]) => {
         setResults(resultsData.results ?? {});
         setCurrentRound(resultsData.current_round ?? 1);
         setPreviousRoundResults(resultsData.previous_round_results ?? {});
@@ -70,12 +91,16 @@ export default function ScenarioPage({
         setRetestRequests(
           (retestData.requests ?? []).filter((r: RetestRequest) => r.status === "pending")
         );
+        const alreadySubmitted = (completionsData.completions ?? []).some(
+          (c: { scenario_id: string }) => c.scenario_id === id
+        );
+        setIsSubmitted(alreadySubmitted);
       })
       .catch(() => {
         router.push("/login");
       })
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, searchParams, id]);
 
   const handleStatusChange = useCallback(
     async (
@@ -278,36 +303,111 @@ export default function ScenarioPage({
         <div className="space-y-3">
           {step.checks.map((check, checkIdx) => {
             const retestReq = retestRequests.find((r) => r.check_id === check.id);
+            const isRetestTarget = isRetestMode && retestCheckId === check.id;
             return (
-              <CheckpointCardExpanded
+              <div
                 key={check.id}
-                check={check}
-                result={results[check.id]}
-                currentRound={currentRound}
-                history={getCheckHistory(check.id)}
-                previousRoundResult={
-                  previousRoundResults[check.id]
-                    ? {
-                        status: previousRoundResults[check.id].status,
-                        round: previousRoundResults[check.id].round,
-                        notes: null,
-                        updated_at: "",
-                      }
-                    : undefined
-                }
-                onStatusChange={handleStatusChange}
-                allResults={results}
-                retestRequest={retestReq}
-                onRetestComplete={handleRetestComplete}
-                stepIndex={checkIdx}
-                totalInStep={step.checks.length}
-              />
+                id={`check-${check.id}`}
+                className={isRetestTarget ? "animate-pulse-border rounded-xl" : ""}
+                style={isRetestTarget ? { border: "2px solid #EAB308", borderRadius: "12px" } : undefined}
+              >
+                {isRetestTarget && retestReq && (
+                  <div className="mb-2 rounded-t-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-xs font-semibold text-amber-800">RETEST REQUESTED</p>
+                    <p className="mt-1 text-xs text-amber-700">The dev team has fixed this issue. Please retest and confirm.</p>
+                    {retestReq.original_notes && (
+                      <p className="mt-1 text-xs text-amber-600">Your original note: &ldquo;{retestReq.original_notes}&rdquo;</p>
+                    )}
+                  </div>
+                )}
+                <CheckpointCardExpanded
+                  check={check}
+                  result={results[check.id]}
+                  currentRound={currentRound}
+                  history={getCheckHistory(check.id)}
+                  previousRoundResult={
+                    previousRoundResults[check.id]
+                      ? {
+                          status: previousRoundResults[check.id].status,
+                          round: previousRoundResults[check.id].round,
+                          notes: null,
+                          updated_at: "",
+                        }
+                      : undefined
+                  }
+                  onStatusChange={handleStatusChange}
+                  allResults={results}
+                  retestRequest={retestReq}
+                  onRetestComplete={handleRetestComplete}
+                  stepIndex={checkIdx}
+                  totalInStep={step.checks.length}
+                />
+              </div>
             );
           })}
         </div>
 
         {/* Step notes */}
         <StepNotes scenarioId={scenario.id} stepIndex={activeStep} />
+
+        {/* Completion card — shown on last step when all checkpoints have a status */}
+        {activeStep === scenario.steps.length - 1 && tested === totalChecks && totalChecks > 0 && !isSubmitted && (
+          <div className="mt-6 rounded-xl border-l-4 p-5" style={{ borderColor: "#1D9E75", backgroundColor: "#F0FDF4" }}>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-lg">✓</span>
+              <h3 className="text-sm font-semibold text-gray-900">All checkpoints complete</h3>
+            </div>
+            <div className="mb-4 flex flex-wrap gap-4 text-xs">
+              <span className="text-green-700">Passed: {allCheckIds.filter((cid) => results[cid]?.status === "pass" || results[cid]?.status === "retest_pass").length}</span>
+              <span className="text-red-700">Failed: {failed}</span>
+              <span className="text-amber-700">Blocked: {allCheckIds.filter((cid) => results[cid]?.status === "blocked").length}</span>
+              <span className="text-gray-500">Skipped: {allCheckIds.filter((cid) => results[cid]?.status === "skip").length}</span>
+            </div>
+            <textarea
+              value={finalNotes}
+              onChange={(e) => setFinalNotes(e.target.value)}
+              placeholder="Optional: Add final notes for this scenario"
+              rows={2}
+              className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#005F78]"
+            />
+            <button
+              onClick={async () => {
+                setSubmitting(true);
+                const passCount = allCheckIds.filter((cid) => results[cid]?.status === "pass" || results[cid]?.status === "retest_pass").length;
+                const failCount = failed;
+                const blockedCount = allCheckIds.filter((cid) => results[cid]?.status === "blocked").length;
+                const skipCount = allCheckIds.filter((cid) => results[cid]?.status === "skip").length;
+                await fetch("/api/scenario-completions", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    scenario_id: scenario.id,
+                    pass_count: passCount,
+                    fail_count: failCount,
+                    blocked_count: blockedCount,
+                    skip_count: skipCount,
+                    final_notes: finalNotes || null,
+                  }),
+                });
+                setSubmitting(false);
+                setIsSubmitted(true);
+                setShowCompletionModal(true);
+              }}
+              disabled={submitting}
+              className="rounded-lg px-5 py-2 text-sm font-medium text-white disabled:opacity-50"
+              style={{ backgroundColor: "#1D9E75" }}
+            >
+              {submitting ? "Submitting..." : "Submit & Finish Scenario"}
+            </button>
+          </div>
+        )}
+
+        {isSubmitted && (
+          <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-center">
+            <p className="text-sm font-medium text-green-800">✓ Scenario submitted</p>
+            <p className="mt-1 text-xs text-green-600">Your results have been recorded and the admin has been notified.</p>
+          </div>
+        )}
 
         {/* Previous / Next */}
         <div className="mt-6 flex items-center justify-between">
@@ -335,6 +435,45 @@ export default function ScenarioPage({
           </button>
         </div>
       </main>
+
+      {/* Success modal */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-8 text-center shadow-2xl">
+            <div className="mb-3 text-4xl">✓</div>
+            <h3 className="mb-2 text-lg font-semibold text-gray-900">Scenario submitted!</h3>
+            <p className="mb-6 text-sm text-gray-500">
+              Your results have been recorded and the admin has been notified.
+            </p>
+            <div className="space-y-2">
+              {(() => {
+                const nextScenario = scenarios.find((s) => {
+                  if (s.id === scenario.id) return false;
+                  return true;
+                });
+                if (nextScenario) {
+                  return (
+                    <button
+                      onClick={() => { setShowCompletionModal(false); router.push(`/scenario/${nextScenario.id}`); }}
+                      className="w-full rounded-lg px-4 py-2.5 text-sm font-medium text-white"
+                      style={{ backgroundColor: "#005F78" }}
+                    >
+                      Go to Next Scenario →
+                    </button>
+                  );
+                }
+                return null;
+              })()}
+              <button
+                onClick={() => { setShowCompletionModal(false); router.push("/dashboard"); }}
+                className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

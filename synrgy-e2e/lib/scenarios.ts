@@ -2578,3 +2578,10 @@ export function getCheckIdsForPaths(scenario: Scenario, paths: Path[]): string[]
     .filter((step) => paths.includes(step.path))
     .flatMap((step) => step.checks.map((c) => c.id));
 }
+
+export function getScenarioStats(scenario: Scenario) {
+  const totalCheckpoints = scenario.steps.reduce((sum, s) => sum + s.checks.length, 0);
+  const estimatedMinutes = Math.round((totalCheckpoints * 2) / 5) * 5 || 5;
+  const platforms = [...new Set(scenario.steps.map((s) => s.platform))];
+  return { totalCheckpoints, estimatedMinutes, platforms, stepCount: scenario.steps.length };
+}

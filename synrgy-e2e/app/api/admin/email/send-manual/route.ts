@@ -13,7 +13,6 @@ export async function POST(request: NextRequest) {
   }
 
   const html = emailTemplate({
-    preheader: subject,
     greeting: toName ? `Hi ${toName},` : "Hi,",
     mainMessage: message,
   });

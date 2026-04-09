@@ -8,6 +8,7 @@ import type { AdminTab } from "@/components/admin/AdminNav";
 import TesterCard from "@/components/admin/TesterCard";
 import BugCard from "@/components/admin/BugCard";
 import NotificationsTab from "@/components/admin/NotificationsTab";
+import DefectLifecycleCard from "@/components/admin/DefectLifecycleCard";
 import StatCard from "@/components/StatCard";
 import { scenarios } from "@/lib/scenarios";
 
@@ -84,6 +85,8 @@ export default function AdminDashboard() {
   const [bugs, setBugs] = useState<Bug[]>([]);
   const [systems, setSystems] = useState<SystemGroup[]>([]);
   const [clusters, setClusters] = useState<FailureCluster[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [defects, setDefects] = useState<any[]>([]);
   const [bugFilter, setBugFilter] = useState({ status: "", severity: "", platform: "" });
   const [showBugForm, setShowBugForm] = useState(false);
   const [newBug, setNewBug] = useState({ title: "", description: "", platform: "", severity: "P1", assignee: "" });
@@ -123,6 +126,10 @@ export default function AdminDashboard() {
       fetch(`/api/admin/bugs?${params}`)
         .then((r) => r.json())
         .then((d) => setBugs(d.bugs ?? []))
+        .catch(() => {});
+      fetch("/api/admin/defects")
+        .then((r) => r.json())
+        .then((d) => setDefects(d.defects ?? []))
         .catch(() => {});
     }
   }, [activeTab, bugFilter]);
@@ -432,6 +439,53 @@ export default function AdminDashboard() {
                 <p className="py-8 text-center text-sm text-gray-400">No bugs found</p>
               )}
             </div>
+
+            {/* Defect Lifecycle */}
+            {defects.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-semibold text-gray-700">Defect Lifecycle</h3>
+                <div className="space-y-2">
+                  {defects
+                    .filter((d) => d.status !== "retest_pass")
+                    .map((d) => (
+                      <DefectLifecycleCard
+                        key={d.id}
+                        defect={d}
+                        onUpdate={async (id, status, adminNotes) => {
+                          const res = await fetch(`/api/admin/defects/${id}`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status, admin_notes: adminNotes }),
+                          });
+                          if (res.ok) {
+                            setDefects((prev) =>
+                              prev.map((dd) => (dd.id === id ? { ...dd, status, admin_notes: adminNotes ?? dd.admin_notes } : dd))
+                            );
+                          }
+                        }}
+                      />
+                    ))}
+                </div>
+                {defects.some((d) => d.status === "retest_pass") && (
+                  <details className="mt-4">
+                    <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                      Resolved ({defects.filter((d) => d.status === "retest_pass").length})
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {defects
+                        .filter((d) => d.status === "retest_pass")
+                        .map((d) => (
+                          <DefectLifecycleCard
+                            key={d.id}
+                            defect={d}
+                            onUpdate={() => {}}
+                          />
+                        ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
           </div>
         )}
 

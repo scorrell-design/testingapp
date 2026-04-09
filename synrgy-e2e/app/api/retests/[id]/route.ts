@@ -57,6 +57,18 @@ export async function PUT(
     .eq("tester_id", tester!.id)
     .eq("check_id", retestReq.check_id);
 
+  await supabase
+    .from("defect_lifecycle")
+    .update({
+      status: newStatus,
+      retest_result,
+      retest_notes: retest_notes || null,
+      retested_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("tester_id", tester!.id)
+    .eq("check_id", retestReq.check_id);
+
   let checkText = retestReq.check_id;
   for (const s of scenarios) {
     for (const step of s.steps) {

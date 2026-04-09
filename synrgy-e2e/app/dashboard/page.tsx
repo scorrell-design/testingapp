@@ -16,6 +16,17 @@ type Assignment = {
   notes: string | null;
   assigner: { name: string } | null;
 };
+type Completion = {
+  scenario_id: string;
+  completed_at: string;
+};
+type PendingRetest = {
+  id: string;
+  check_id: string;
+  scenario_id: string;
+  what_to_verify: string;
+  status: string;
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -27,6 +38,9 @@ export default function DashboardPage() {
   const [startingNewRound, setStartingNewRound] = useState(false);
   const [myAssignments, setMyAssignments] = useState<Assignment[]>([]);
   const [retestCount, setRetestCount] = useState(0);
+  const [completions, setCompletions] = useState<Completion[]>([]);
+  const [pendingRetests, setPendingRetests] = useState<PendingRetest[]>([]);
+  const [showRetestList, setShowRetestList] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -38,8 +52,9 @@ export default function DashboardPage() {
       fetch("/api/round").then((r) => r.json()),
       fetch("/api/assignments/mine").then((r) => r.ok ? r.json() : { assignments: [] }),
       fetch("/api/retests/mine").then((r) => r.ok ? r.json() : { requests: [] }),
+      fetch("/api/scenario-completions").then((r) => r.ok ? r.json() : { completions: [] }),
     ])
-      .then(([authData, resultsData, roundData, assignData, retestData]) => {
+      .then(([authData, resultsData, roundData, assignData, retestData, completionsData]) => {
         setTester(authData.tester);
         setResults(resultsData.results ?? {});
         setCurrentRound(roundData.current_round ?? 1);
@@ -48,6 +63,8 @@ export default function DashboardPage() {
           (r: { status: string }) => r.status === "pending"
         );
         setRetestCount(pending.length);
+        setPendingRetests(pending);
+        setCompletions(completionsData.completions ?? []);
       })
       .catch(() => {
         router.push("/login");
@@ -222,6 +239,72 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Retest alert bar */}
+        {pendingRetests.length > 0 && (
+          <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">🔄</span>
+                <p className="text-sm font-medium text-amber-800">
+                  You have {pendingRetests.length} item{pendingRetests.length > 1 ? "s" : ""} to retest
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (pendingRetests.length === 1) {
+                    const r = pendingRetests[0];
+                    let stepIdx = 0;
+                    const sc = scenarios.find((s) => s.id === r.scenario_id);
+                    if (sc) {
+                      for (let si = 0; si < sc.steps.length; si++) {
+                        if (sc.steps[si].checks.some((c) => c.id === r.check_id)) { stepIdx = si; break; }
+                      }
+                    }
+                    router.push(`/scenario/${r.scenario_id}?step=${stepIdx}&check=${r.check_id}&retest=true`);
+                  } else {
+                    setShowRetestList(!showRetestList);
+                  }
+                }}
+                className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+              >
+                View Retests →
+              </button>
+            </div>
+            {showRetestList && pendingRetests.length > 1 && (
+              <div className="mt-3 space-y-2 border-t border-amber-200 pt-3">
+                {pendingRetests.map((r) => {
+                  const sc = scenarios.find((s) => s.id === r.scenario_id);
+                  let stepIdx = 0;
+                  let stepTitle = "";
+                  if (sc) {
+                    for (let si = 0; si < sc.steps.length; si++) {
+                      if (sc.steps[si].checks.some((c) => c.id === r.check_id)) {
+                        stepIdx = si;
+                        stepTitle = sc.steps[si].title;
+                        break;
+                      }
+                    }
+                  }
+                  return (
+                    <div key={r.id} className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-amber-900">[{r.check_id}] {r.what_to_verify.slice(0, 60)}</p>
+                        <p className="text-[10px] text-amber-600">{sc?.title}, {stepTitle}</p>
+                      </div>
+                      <Link
+                        href={`/scenario/${r.scenario_id}?step=${stepIdx}&check=${r.check_id}&retest=true`}
+                        className="text-xs font-medium text-amber-700 hover:text-amber-900"
+                      >
+                        Go →
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Empty state for testers with no assignments */}
         {!isAdmin && displayScenarios.length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white px-6 py-16 text-center">
@@ -260,6 +343,7 @@ export default function DashboardPage() {
                     scenario={scenario}
                     index={i}
                     results={results}
+                    completion={completions.find((c) => c.scenario_id === scenario.id)}
                   />
                 </div>
               );

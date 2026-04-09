@@ -213,6 +213,11 @@ export async function PUT(request: NextRequest) {
   checkScenarioCompletion(testerId, check_id, currentRound, testerName)
     .catch((err) => console.error("Completion check failed:", err));
 
+  if (status === "fail") {
+    createDefectLifecycle(testerId, check_id, body.notes || null)
+      .catch((err) => console.error("Defect lifecycle creation failed:", err));
+  }
+
   return NextResponse.json({ result: data });
 }
 
@@ -342,4 +347,34 @@ export async function DELETE(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+async function createDefectLifecycle(testerId: string, checkId: string, notes: string | null) {
+  let scenarioId = "";
+  let stepIndex = 0;
+
+  for (const s of scenarios) {
+    for (let si = 0; si < s.steps.length; si++) {
+      if (s.steps[si].checks.some((c) => c.id === checkId)) {
+        scenarioId = s.id;
+        stepIndex = si;
+        break;
+      }
+    }
+    if (scenarioId) break;
+  }
+
+  if (!scenarioId) return;
+
+  await supabase.from("defect_lifecycle").upsert(
+    {
+      tester_id: testerId,
+      check_id: checkId,
+      scenario_id: scenarioId,
+      step_index: stepIndex,
+      status: "fail",
+      original_notes: notes,
+    },
+    { onConflict: "tester_id,check_id" }
+  );
 }

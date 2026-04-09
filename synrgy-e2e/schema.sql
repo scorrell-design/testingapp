@@ -215,6 +215,43 @@ INSERT INTO email_settings (setting_key, enabled) VALUES
   ('auto_retest_completed_email', true)
 ON CONFLICT (setting_key) DO NOTHING;
 
+-- ─── Scenario completions ───
+CREATE TABLE IF NOT EXISTS scenario_completions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tester_id uuid REFERENCES testers(id) ON DELETE CASCADE,
+  scenario_id text NOT NULL,
+  pass_count int NOT NULL,
+  fail_count int NOT NULL,
+  blocked_count int NOT NULL,
+  skip_count int NOT NULL,
+  final_notes text,
+  completed_at timestamptz DEFAULT now(),
+  UNIQUE(tester_id, scenario_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_scenario_completions_tester ON scenario_completions(tester_id);
+
+-- ─── Defect lifecycle ───
+CREATE TABLE IF NOT EXISTS defect_lifecycle (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tester_id uuid REFERENCES testers(id) ON DELETE CASCADE,
+  check_id text NOT NULL,
+  scenario_id text NOT NULL,
+  step_index int NOT NULL,
+  status text NOT NULL DEFAULT 'fail',
+  admin_notes text,
+  original_notes text,
+  retest_notes text,
+  retest_result text,
+  retested_at timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(tester_id, check_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_defect_lifecycle_tester ON defect_lifecycle(tester_id);
+CREATE INDEX IF NOT EXISTS idx_defect_lifecycle_status ON defect_lifecycle(status);
+
 -- Migration for existing databases:
 -- ALTER TABLE testers ADD COLUMN IF NOT EXISTS current_round integer DEFAULT 1;
 -- ALTER TABLE test_results ADD COLUMN IF NOT EXISTS round integer DEFAULT 1;
