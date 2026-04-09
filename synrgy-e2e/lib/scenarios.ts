@@ -5,6 +5,12 @@ export type Check = {
   text: string;
   expected: string;
   preReqs?: string;
+  successCriteria?: string[];
+  whereToLook?: string;
+  howToGetThere?: string;
+  failureGuidance?: string;
+  dependsOn?: string[];
+  estimatedMinutes?: number;
 };
 
 export type Step = {

@@ -6,11 +6,12 @@ import Link from "next/link";
 import { scenarios, getScenarioCheckCount, getCheckIdsForPaths } from "@/lib/scenarios";
 import type { Scenario, Path } from "@/lib/scenarios";
 import StepPill from "@/components/StepPill";
-import CheckpointCard from "@/components/CheckpointCard";
-import type { ResultData } from "@/components/CheckpointCard";
+import CheckpointCardExpanded from "@/components/testing/CheckpointCardExpanded";
+import type { ResultData } from "@/components/testing/CheckpointCardExpanded";
 import ProgressBar from "@/components/ProgressBar";
 import StepNotes from "@/components/StepNotes";
 import PathBadge from "@/components/PathBadge";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
 type ResultMap = Record<string, ResultData>;
 type AllRoundResult = {
@@ -20,6 +21,16 @@ type AllRoundResult = {
   round: number;
   severity?: string | null;
   defect_description?: string | null;
+};
+
+type RetestRequest = {
+  id: string;
+  check_id: string;
+  reason: string;
+  what_to_verify: string;
+  original_notes: string | null;
+  status: string;
+  requester: { name: string } | null;
 };
 
 export default function ScenarioPage({
@@ -38,6 +49,7 @@ export default function ScenarioPage({
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [currentRound, setCurrentRound] = useState(1);
+  const [retestRequests, setRetestRequests] = useState<RetestRequest[]>([]);
 
   const scenario: Scenario | undefined = scenarios.find((s) => s.id === id);
 
@@ -50,14 +62,18 @@ export default function ScenarioPage({
       fetch("/api/results").then((r) => r.json()),
       fetch("/api/results?all_rounds=true").then((r) => r.json()),
       fetch("/api/paths").then((r) => r.json()),
+      fetch("/api/retests/mine").then((r) => r.ok ? r.json() : { requests: [] }),
     ])
-      .then(([, resultsData, allRoundsData, pathsData]) => {
+      .then(([, resultsData, allRoundsData, pathsData, retestData]) => {
         setResults(resultsData.results ?? {});
         setCurrentRound(resultsData.current_round ?? 1);
         setPreviousRoundResults(resultsData.previous_round_results ?? {});
         setAllRoundResults(allRoundsData.results ?? []);
         const paths = pathsData.paths ?? [];
         setAssignedPaths(["core", ...paths] as Path[]);
+        setRetestRequests(
+          (retestData.requests ?? []).filter((r: RetestRequest) => r.status === "pending")
+        );
       })
       .catch(() => {
         router.push("/login");
@@ -109,6 +125,21 @@ export default function ScenarioPage({
       }
     },
     [currentRound]
+  );
+
+  const handleRetestComplete = useCallback(
+    async (requestId: string, retestResult: "pass" | "fail", retestNotes: string) => {
+      await fetch(`/api/retests/${requestId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retest_result: retestResult, retest_notes: retestNotes }),
+      });
+      setRetestRequests((prev) => prev.filter((r) => r.id !== requestId));
+      const resultsRes = await fetch("/api/results");
+      const resultsData = await resultsRes.json();
+      setResults(resultsData.results ?? {});
+    },
+    []
   );
 
   function getCheckHistory(checkId: string) {
@@ -165,15 +196,18 @@ export default function ScenarioPage({
       {/* Header */}
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6">
-          <Link
-            href="/dashboard"
-            className="mb-3 inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
-          >
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to dashboard
-          </Link>
+          <div className="mb-3 flex items-center justify-between">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to dashboard
+            </Link>
+            <NotificationBell />
+          </div>
 
           <div className="flex items-start gap-3">
             <div
@@ -266,29 +300,34 @@ export default function ScenarioPage({
           className="space-y-3"
           style={{ opacity: isStepAssigned ? 1 : 0.6 }}
         >
-          {step.checks.map((check) => (
-            <CheckpointCard
-              key={check.id}
-              checkId={check.id}
-              text={check.text}
-              expected={check.expected}
-              preReqs={check.preReqs}
-              result={results[check.id]}
-              currentRound={currentRound}
-              history={getCheckHistory(check.id)}
-              previousRoundResult={
-                previousRoundResults[check.id]
-                  ? {
-                      status: previousRoundResults[check.id].status,
-                      round: previousRoundResults[check.id].round,
-                      notes: null,
-                      updated_at: "",
-                    }
-                  : undefined
-              }
-              onStatusChange={handleStatusChange}
-            />
-          ))}
+          {step.checks.map((check, checkIdx) => {
+            const retestReq = retestRequests.find((r) => r.check_id === check.id);
+            return (
+              <CheckpointCardExpanded
+                key={check.id}
+                check={check}
+                result={results[check.id]}
+                currentRound={currentRound}
+                history={getCheckHistory(check.id)}
+                previousRoundResult={
+                  previousRoundResults[check.id]
+                    ? {
+                        status: previousRoundResults[check.id].status,
+                        round: previousRoundResults[check.id].round,
+                        notes: null,
+                        updated_at: "",
+                      }
+                    : undefined
+                }
+                onStatusChange={handleStatusChange}
+                allResults={results}
+                retestRequest={retestReq}
+                onRetestComplete={handleRetestComplete}
+                stepIndex={checkIdx}
+                totalInStep={step.checks.length}
+              />
+            );
+          })}
         </div>
 
         {/* Step notes */}
