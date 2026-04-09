@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
           ],
           persona: "Admin",
           adminNotes: "This is a test email — please verify formatting and links.",
+          sentBy: tester!.id,
+          triggeredBy: "manual",
         });
         break;
 
@@ -49,6 +51,8 @@ export async function POST(request: NextRequest) {
             { id: "broker-delete-3", text: "Deleted broker is removed from the list" },
           ],
           assignerEmail: email,
+          sentBy: tester!.id,
+          triggeredBy: "manual",
         });
         break;
 
@@ -64,6 +68,8 @@ export async function POST(request: NextRequest) {
           scenarioId: "admin-broker",
           stepIndex: 2,
           checkId: "broker-create-1",
+          sentBy: tester!.id,
+          triggeredBy: "manual",
         });
         break;
 
@@ -76,6 +82,8 @@ export async function POST(request: NextRequest) {
           retestNotes: "Still not showing up immediately. I created a broker named 'Test Co' and had to wait about 10 seconds before it appeared. Slightly better but not instant.",
           whatToVerify: "Create a new broker and confirm it appears in the broker list immediately without needing to refresh the page.",
           adminEmail: email,
+          sentBy: tester!.id,
+          triggeredBy: "manual",
         });
         break;
 

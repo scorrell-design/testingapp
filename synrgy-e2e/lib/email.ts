@@ -81,12 +81,17 @@ const SETTING_KEYS: Record<string, string> = {
 async function isEmailTypeEnabled(type: string): Promise<boolean> {
   const key = SETTING_KEYS[type];
   if (!key) return true;
-  const { data } = await supabase
-    .from("email_settings")
-    .select("enabled")
-    .eq("setting_key", key)
-    .single();
-  return data?.enabled !== false;
+  try {
+    const { data, error } = await supabase
+      .from("email_settings")
+      .select("enabled")
+      .eq("setting_key", key)
+      .single();
+    if (error) return true;
+    return data?.enabled !== false;
+  } catch {
+    return true;
+  }
 }
 
 // ─── Core send + log ─────────────────────────────────────────────
@@ -150,13 +155,17 @@ export async function sendEmail(
     triggered_by: triggeredBy,
   };
 
-  const { data: logged } = await supabase
-    .from("email_log")
-    .insert(logEntry)
-    .select("id")
-    .single();
-
-  return logged;
+  try {
+    const { data: logged } = await supabase
+      .from("email_log")
+      .insert(logEntry)
+      .select("id")
+      .single();
+    return logged;
+  } catch {
+    console.error("[email] Failed to log email to email_log table");
+    return null;
+  }
 }
 
 // ─── EMAIL 1: Tester assigned to scenario(s) ─────────────────────
