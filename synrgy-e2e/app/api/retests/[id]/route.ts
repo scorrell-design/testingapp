@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { requireAuth } from "@/lib/admin-guard";
 import { createNotification } from "@/lib/notifications";
+import { sendRetestCompletedEmail } from "@/lib/email";
 import { scenarios } from "@/lib/scenarios";
 
 export async function PUT(
@@ -73,6 +74,22 @@ export async function PUT(
       body: retest_notes || undefined,
       link: `/admin/tester/${tester!.id}`,
     });
+
+    const { data: requesterRow } = await supabase
+      .from("testers")
+      .select("email")
+      .eq("id", retestReq.requester.id)
+      .single();
+
+    sendRetestCompletedEmail({
+      testerName: tester!.name,
+      testerId: tester!.id,
+      checkpointText: checkText,
+      result: retest_result as "pass" | "fail",
+      retestNotes: retest_notes || null,
+      whatToVerify: retestReq.what_to_verify || "",
+      adminEmail: requesterRow?.email ?? null,
+    }).catch((err) => console.error("Retest completed email failed:", err));
   }
 
   return NextResponse.json({ retestRequest: data });

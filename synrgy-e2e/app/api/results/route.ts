@@ -7,6 +7,8 @@ import {
   getAllTesterResults,
   syncSummaryTab,
 } from "@/lib/google-sheets";
+import { sendCompletionEmail } from "@/lib/email";
+import { scenarios } from "@/lib/scenarios";
 
 const VALID_STATUSES = [
   "pass", "fail", "blocked", "skip",
@@ -208,7 +210,94 @@ export async function PUT(request: NextRequest) {
       .catch((err: unknown) => console.error("Sheets sync failed:", err));
   }
 
+  checkScenarioCompletion(testerId, check_id, currentRound, testerName)
+    .catch((err) => console.error("Completion check failed:", err));
+
   return NextResponse.json({ result: data });
+}
+
+async function checkScenarioCompletion(
+  testerId: string,
+  checkId: string,
+  round: number,
+  testerName: string
+) {
+  const { data: assignments } = await supabase
+    .from("assignments")
+    .select("scenario_id, assigned_by")
+    .eq("tester_id", testerId);
+
+  if (!assignments?.length) return;
+
+  for (const assignment of assignments) {
+    const scenario = scenarios.find((s) => s.id === assignment.scenario_id);
+    if (!scenario) continue;
+
+    const allCheckIds = scenario.steps.flatMap((step) =>
+      step.checks.map((c) => c.id)
+    );
+    if (!allCheckIds.includes(checkId)) continue;
+
+    const { data: resultRows } = await supabase
+      .from("test_results")
+      .select("check_id, status")
+      .eq("tester_id", testerId)
+      .eq("round", round)
+      .in("check_id", allCheckIds);
+
+    const resultMap = new Map((resultRows ?? []).map((r) => [r.check_id, r.status]));
+    const testedCount = allCheckIds.filter((id) => resultMap.has(id)).length;
+
+    if (testedCount !== allCheckIds.length) continue;
+
+    const withoutCurrent = allCheckIds.filter((id) => id !== checkId);
+    const previouslyTested = withoutCurrent.filter((id) => resultMap.has(id)).length;
+    if (previouslyTested !== withoutCurrent.length) continue;
+
+    let passed = 0, failed = 0, blocked = 0, skipped = 0;
+    const failedChecks: { id: string; text: string }[] = [];
+
+    for (const cid of allCheckIds) {
+      const s = resultMap.get(cid) ?? "";
+      if (s === "pass" || s === "retest_pass") passed++;
+      else if (s === "fail" || s === "retest_fail") {
+        failed++;
+        const check = scenario.steps.flatMap((st) => st.checks).find((c) => c.id === cid);
+        if (check) failedChecks.push({ id: cid, text: check.text });
+      } else if (s === "blocked") blocked++;
+      else skipped++;
+    }
+
+    const { data: testerRow } = await supabase
+      .from("testers")
+      .select("email")
+      .eq("id", testerId)
+      .single();
+
+    let assignerEmail: string | null = null;
+    if (assignment.assigned_by) {
+      const { data: assigner } = await supabase
+        .from("testers")
+        .select("email")
+        .eq("id", assignment.assigned_by)
+        .single();
+      assignerEmail = assigner?.email ?? null;
+    }
+
+    sendCompletionEmail({
+      testerName,
+      testerEmail: testerRow?.email ?? "",
+      testerId,
+      scenarioTitle: scenario.title,
+      passed,
+      failed,
+      blocked,
+      skipped,
+      total: allCheckIds.length,
+      failedChecks,
+      assignerEmail,
+    }).catch((err) => console.error("Completion email failed:", err));
+  }
 }
 
 export async function DELETE(request: NextRequest) {

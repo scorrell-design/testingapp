@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin-guard";
-import { sendAssignmentEmail, createNotification } from "@/lib/notifications";
+import { createNotification } from "@/lib/notifications";
+import { sendAssignmentEmail } from "@/lib/email";
 import { scenarios } from "@/lib/scenarios";
 
 export async function GET() {
@@ -80,17 +81,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
+  const scenarioTitles = (scenario_ids as string[]).map((sid) => {
+    const s = scenarios.find((sc) => sc.id === sid);
+    return { title: s?.title || sid, summary: s?.summary || "" };
+  });
+
+  sendAssignmentEmail({
+    testerEmail: targetTester!.email,
+    testerName: targetTester!.name,
+    adminName: tester!.name,
+    scenarioTitles,
+    persona,
+    adminNotes: notes || null,
+  }).catch((err) => console.error("Assignment email failed:", err));
+
   for (const sid of scenario_ids as string[]) {
-    const scenario = scenarios.find((s) => s.id === sid);
-    const scenarioTitle = scenario?.title || sid;
-
-    sendAssignmentEmail({
-      testerEmail: targetTester!.email,
-      testerName: targetTester!.name,
-      scenarioTitle,
-      adminNotes: notes || null,
-    }).catch((err) => console.error("Assignment email failed:", err));
-
+    const scenarioTitle = scenarios.find((s) => s.id === sid)?.title || sid;
     createNotification({
       testerId: targetTester!.id,
       type: "assignment",

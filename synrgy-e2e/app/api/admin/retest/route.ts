@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin-guard";
-import { createNotification, sendRetestEmail, sendSlackNotification } from "@/lib/notifications";
+import { createNotification, sendSlackNotification } from "@/lib/notifications";
+import { sendRetestRequestedEmail } from "@/lib/email";
 import { scenarios } from "@/lib/scenarios";
 
 export async function POST(request: NextRequest) {
@@ -48,14 +49,15 @@ export async function POST(request: NextRequest) {
   }
 
   let checkText = check_id;
+  let stepIndex = 0;
   for (const s of scenarios) {
-    for (const step of s.steps) {
-      const c = step.checks.find((ch) => ch.id === check_id);
-      if (c) { checkText = c.text; break; }
+    for (let si = 0; si < s.steps.length; si++) {
+      const c = s.steps[si].checks.find((ch) => ch.id === check_id);
+      if (c) { checkText = c.text; stepIndex = si; break; }
     }
   }
 
-  const appLink = `/scenario/${scenario_id}?retest=${check_id}`;
+  const appLink = `/scenario/${scenario_id}?step=${stepIndex}&check=${check_id}`;
 
   await createNotification({
     testerId: tester_id,
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (targetTester) {
-    sendRetestEmail({
+    sendRetestRequestedEmail({
       testerEmail: targetTester.email,
       testerName: targetTester.name,
       adminName: admin!.name,
@@ -80,8 +82,10 @@ export async function POST(request: NextRequest) {
       reason,
       whatToVerify: what_to_verify,
       originalNotes: original_notes || null,
-      appLink: `${process.env.NEXT_PUBLIC_APP_URL || ""}${appLink}`,
-    }).catch((err) => console.error("Email send failed:", err));
+      scenarioId: scenario_id,
+      stepIndex,
+      checkId: check_id,
+    }).catch((err) => console.error("Retest email failed:", err));
 
     sendSlackNotification({
       text: `🔄 *Retest requested* by ${admin!.name}\n*Tester:* ${targetTester.name}\n*Checkpoint:* ${checkText}\n*What was fixed:* ${reason}`,
