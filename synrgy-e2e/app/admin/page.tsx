@@ -7,6 +7,7 @@ import AdminNav from "@/components/admin/AdminNav";
 import type { AdminTab } from "@/components/admin/AdminNav";
 import TesterCard from "@/components/admin/TesterCard";
 import BugCard from "@/components/admin/BugCard";
+import NotificationsTab from "@/components/admin/NotificationsTab";
 import StatCard from "@/components/StatCard";
 import { scenarios } from "@/lib/scenarios";
 
@@ -485,6 +486,9 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
+
+        {/* View E: Notifications */}
+        {activeTab === "notifications" && <NotificationsTab />}
       </main>
     </div>
   );

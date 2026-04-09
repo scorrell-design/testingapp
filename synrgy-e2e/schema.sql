@@ -179,6 +179,42 @@ CREATE TABLE admin_comments (
 
 CREATE INDEX idx_admin_comments_checkpoint ON admin_comments(tester_id, check_id);
 
+-- ─── Email log & settings ───
+CREATE TABLE IF NOT EXISTS email_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  to_email text NOT NULL,
+  to_name text,
+  subject text NOT NULL,
+  email_type text NOT NULL,
+  html text,
+  status text NOT NULL DEFAULT 'sent',
+  error_message text,
+  related_tester_id uuid REFERENCES testers(id),
+  related_scenario_id text,
+  related_check_id text,
+  sent_by uuid REFERENCES testers(id),
+  triggered_by text NOT NULL DEFAULT 'automated',
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_log_type ON email_log(email_type);
+CREATE INDEX IF NOT EXISTS idx_email_log_created ON email_log(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS email_settings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  setting_key text UNIQUE NOT NULL,
+  enabled boolean NOT NULL DEFAULT true,
+  updated_by uuid REFERENCES testers(id),
+  updated_at timestamptz DEFAULT now()
+);
+
+INSERT INTO email_settings (setting_key, enabled) VALUES
+  ('auto_assignment_email', true),
+  ('auto_completion_email', true),
+  ('auto_retest_request_email', true),
+  ('auto_retest_completed_email', true)
+ON CONFLICT (setting_key) DO NOTHING;
+
 -- Migration for existing databases:
 -- ALTER TABLE testers ADD COLUMN IF NOT EXISTS current_round integer DEFAULT 1;
 -- ALTER TABLE test_results ADD COLUMN IF NOT EXISTS round integer DEFAULT 1;

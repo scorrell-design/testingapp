@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { supabase } from "./supabase";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -18,7 +19,7 @@ function esc(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function emailTemplate(content: {
+export function emailTemplate(content: {
   preheader: string;
   greeting: string;
   mainMessage: string;
@@ -68,22 +69,94 @@ function emailTemplate(content: {
 </body></html>`;
 }
 
-async function sendEmail(to: string | string[], subject: string, html: string) {
+// ─── Settings check ──────────────────────────────────────────────
+
+const SETTING_KEYS: Record<string, string> = {
+  assignment: "auto_assignment_email",
+  completion: "auto_completion_email",
+  retest_request: "auto_retest_request_email",
+  retest_completed: "auto_retest_completed_email",
+};
+
+async function isEmailTypeEnabled(type: string): Promise<boolean> {
+  const key = SETTING_KEYS[type];
+  if (!key) return true;
+  const { data } = await supabase
+    .from("email_settings")
+    .select("enabled")
+    .eq("setting_key", key)
+    .single();
+  return data?.enabled !== false;
+}
+
+// ─── Core send + log ─────────────────────────────────────────────
+
+type EmailMeta = {
+  type: string;
+  toName?: string;
+  testerId?: string;
+  scenarioId?: string;
+  checkId?: string;
+  sentBy?: string;
+  triggeredBy?: "automated" | "manual";
+};
+
+export async function sendEmail(
+  to: string | string[],
+  subject: string,
+  html: string,
+  meta: EmailMeta
+) {
+  const triggeredBy = meta.triggeredBy || "automated";
+
+  if (triggeredBy === "automated") {
+    const enabled = await isEmailTypeEnabled(meta.type);
+    if (!enabled) {
+      console.log(`[email] ${meta.type} disabled, skipping:`, subject);
+      return null;
+    }
+  }
+
+  const recipients = Array.isArray(to) ? to : [to];
+  let status = "sent";
+  let errorMessage: string | null = null;
+
   if (!resend) {
     console.log("[email] Resend not configured, skipping:", subject);
-    return;
+    status = "failed";
+    errorMessage = "RESEND_API_KEY not configured";
+  } else {
+    try {
+      await resend.emails.send({ from: FROM_EMAIL, to: recipients, subject, html });
+    } catch (error) {
+      console.error("[email] Failed to send:", error);
+      status = "failed";
+      errorMessage = error instanceof Error ? error.message : String(error);
+    }
   }
-  const recipients = Array.isArray(to) ? to : [to];
-  try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to: recipients,
-      subject,
-      html,
-    });
-  } catch (error) {
-    console.error("[email] Failed to send:", error);
-  }
+
+  const logEntry = {
+    to_email: recipients.join(", "),
+    to_name: meta.toName || null,
+    subject,
+    html,
+    email_type: meta.type,
+    status,
+    error_message: errorMessage,
+    related_tester_id: meta.testerId || null,
+    related_scenario_id: meta.scenarioId || null,
+    related_check_id: meta.checkId || null,
+    sent_by: meta.sentBy || null,
+    triggered_by: triggeredBy,
+  };
+
+  const { data: logged } = await supabase
+    .from("email_log")
+    .insert(logEntry)
+    .select("id")
+    .single();
+
+  return logged;
 }
 
 // ─── EMAIL 1: Tester assigned to scenario(s) ─────────────────────
@@ -95,6 +168,8 @@ export async function sendAssignmentEmail(opts: {
   scenarioTitles: { title: string; summary: string }[];
   persona: string;
   adminNotes?: string | null;
+  sentBy?: string;
+  triggeredBy?: "automated" | "manual";
 }) {
   const scenarioList = opts.scenarioTitles
     .map((s) => `${s.title} — ${s.summary}`)
@@ -128,7 +203,13 @@ export async function sendAssignmentEmail(opts: {
       "You'll be testing on the SYNRGY E2E Testing platform. Log in with this email address to get started.",
   });
 
-  await sendEmail(opts.testerEmail, subject, html);
+  return sendEmail(opts.testerEmail, subject, html, {
+    type: "assignment",
+    toName: opts.testerName,
+    scenarioId: opts.scenarioTitles.map((s) => s.title).join(", "),
+    sentBy: opts.sentBy,
+    triggeredBy: opts.triggeredBy || "automated",
+  });
 }
 
 // ─── EMAIL 2: Tester completed all checkpoints for a scenario ────
@@ -145,13 +226,15 @@ export async function sendCompletionEmail(opts: {
   total: number;
   failedChecks: { id: string; text: string }[];
   assignerEmail?: string | null;
+  sentBy?: string;
+  triggeredBy?: "automated" | "manual";
 }) {
   const recipients: string[] = [];
   if (ADMIN_EMAIL) recipients.push(ADMIN_EMAIL);
   if (opts.assignerEmail && !recipients.includes(opts.assignerEmail)) {
     recipients.push(opts.assignerEmail);
   }
-  if (recipients.length === 0) return;
+  if (recipients.length === 0) return null;
 
   const summary = `${opts.passed} passed, ${opts.failed} failed, ${opts.blocked} blocked, ${opts.skipped} skipped out of ${opts.total} total checkpoints`;
 
@@ -178,10 +261,18 @@ export async function sendCompletionEmail(opts: {
     ctaUrl: `${APP_URL}/admin/tester/${opts.testerId}`,
   });
 
-  await sendEmail(
+  return sendEmail(
     recipients,
     `${opts.testerName} has completed testing: ${opts.scenarioTitle}`,
-    html
+    html,
+    {
+      type: "completion",
+      toName: opts.testerName,
+      testerId: opts.testerId,
+      scenarioId: opts.scenarioTitle,
+      sentBy: opts.sentBy,
+      triggeredBy: opts.triggeredBy || "automated",
+    }
   );
 }
 
@@ -198,6 +289,8 @@ export async function sendRetestRequestedEmail(opts: {
   scenarioId: string;
   stepIndex: number;
   checkId: string;
+  sentBy?: string;
+  triggeredBy?: "automated" | "manual";
 }) {
   const sections: { label: string; text: string }[] = [
     { label: "What was fixed", text: opts.reason },
@@ -220,10 +313,19 @@ export async function sendRetestRequestedEmail(opts: {
     footer: "Please complete this retest at your earliest convenience.",
   });
 
-  await sendEmail(
+  return sendEmail(
     opts.testerEmail,
     `Retest requested: ${opts.checkpointText.slice(0, 60)}`,
-    html
+    html,
+    {
+      type: "retest_request",
+      toName: opts.testerName,
+      testerId: undefined,
+      scenarioId: opts.scenarioId,
+      checkId: opts.checkId,
+      sentBy: opts.sentBy,
+      triggeredBy: opts.triggeredBy || "automated",
+    }
   );
 }
 
@@ -237,13 +339,15 @@ export async function sendRetestCompletedEmail(opts: {
   retestNotes?: string | null;
   whatToVerify: string;
   adminEmail?: string | null;
+  sentBy?: string;
+  triggeredBy?: "automated" | "manual";
 }) {
   const recipients: string[] = [];
   if (ADMIN_EMAIL) recipients.push(ADMIN_EMAIL);
   if (opts.adminEmail && !recipients.includes(opts.adminEmail)) {
     recipients.push(opts.adminEmail);
   }
-  if (recipients.length === 0) return;
+  if (recipients.length === 0) return null;
 
   const isFixed = opts.result === "pass";
   const resultLabel = isFixed ? "VERIFIED FIXED" : "STILL FAILING";
@@ -275,9 +379,112 @@ export async function sendRetestCompletedEmail(opts: {
   });
 
   const subjectStatus = isFixed ? "FIXED" : "STILL FAILING";
-  await sendEmail(
+  return sendEmail(
     recipients,
     `Retest result: ${opts.checkpointText.slice(0, 50)} — ${subjectStatus}`,
-    html
+    html,
+    {
+      type: "retest_completed",
+      toName: opts.testerName,
+      testerId: opts.testerId,
+      sentBy: opts.sentBy,
+      triggeredBy: opts.triggeredBy || "automated",
+    }
   );
+}
+
+// ─── Nudge / broadcast helpers ───────────────────────────────────
+
+export async function sendNudgeEmail(opts: {
+  testerEmail: string;
+  testerName: string;
+  pendingScenarios: number;
+  sentBy?: string;
+}) {
+  const html = emailTemplate({
+    preheader: `You have ${opts.pendingScenarios} testing scenarios waiting`,
+    greeting: `Hi ${opts.testerName},`,
+    mainMessage: `Just a reminder — you have <strong>${opts.pendingScenarios}</strong> testing scenario${opts.pendingScenarios > 1 ? "s" : ""} waiting for you.`,
+    ctaText: "Start testing →",
+    ctaUrl: `${APP_URL}/dashboard`,
+    footer: "This is a reminder from SYNRGY E2E Testing.",
+  });
+
+  return sendEmail(
+    opts.testerEmail,
+    `Reminder: ${opts.pendingScenarios} test scenario${opts.pendingScenarios > 1 ? "s" : ""} waiting`,
+    html,
+    {
+      type: "manual",
+      toName: opts.testerName,
+      sentBy: opts.sentBy,
+      triggeredBy: "manual",
+    }
+  );
+}
+
+export async function sendRetestNudgeEmail(opts: {
+  testerEmail: string;
+  testerName: string;
+  pendingRetests: number;
+  sentBy?: string;
+}) {
+  const html = emailTemplate({
+    preheader: `You have ${opts.pendingRetests} retest(s) waiting`,
+    greeting: `Hi ${opts.testerName},`,
+    mainMessage: `You have <strong>${opts.pendingRetests}</strong> retest${opts.pendingRetests > 1 ? "s" : ""} waiting. Your admin deployed fixes and is waiting on your verification.`,
+    ctaText: "View retests →",
+    ctaUrl: `${APP_URL}/retests`,
+    footer: "Please complete these retests at your earliest convenience.",
+  });
+
+  return sendEmail(
+    opts.testerEmail,
+    `Reminder: ${opts.pendingRetests} retest${opts.pendingRetests > 1 ? "s" : ""} awaiting verification`,
+    html,
+    {
+      type: "manual",
+      toName: opts.testerName,
+      sentBy: opts.sentBy,
+      triggeredBy: "manual",
+    }
+  );
+}
+
+export async function sendBroadcastEmail(opts: {
+  testerEmail: string;
+  testerName: string;
+  subject: string;
+  message: string;
+  sentBy?: string;
+}) {
+  const html = emailTemplate({
+    preheader: opts.subject,
+    greeting: `Hi ${opts.testerName},`,
+    mainMessage: esc(opts.message),
+    ctaText: "Go to dashboard →",
+    ctaUrl: `${APP_URL}/dashboard`,
+  });
+
+  return sendEmail(opts.testerEmail, opts.subject, html, {
+    type: "manual",
+    toName: opts.testerName,
+    sentBy: opts.sentBy,
+    triggeredBy: "manual",
+  });
+}
+
+export async function sendManualEmail(opts: {
+  to: string;
+  toName?: string;
+  subject: string;
+  html: string;
+  sentBy?: string;
+}) {
+  return sendEmail(opts.to, opts.subject, opts.html, {
+    type: "manual",
+    toName: opts.toName,
+    sentBy: opts.sentBy,
+    triggeredBy: "manual",
+  });
 }

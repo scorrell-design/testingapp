@@ -5,6 +5,7 @@ const TABS = [
   { id: "systems", label: "By System", icon: "🖥" },
   { id: "bugs", label: "Bug Tracker", icon: "🐛" },
   { id: "consolidation", label: "Consolidation", icon: "🔗" },
+  { id: "notifications", label: "Notifications", icon: "📧" },
 ] as const;
 
 export type AdminTab = (typeof TABS)[number]["id"];
