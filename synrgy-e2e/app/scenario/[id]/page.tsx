@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { scenarios, getScenarioCheckCount, getCheckIdsForPaths } from "@/lib/scenarios";
-import type { Scenario, Path } from "@/lib/scenarios";
+import { scenarios } from "@/lib/scenarios";
+import type { Scenario } from "@/lib/scenarios";
 import StepPill from "@/components/StepPill";
 import CheckpointCardExpanded from "@/components/testing/CheckpointCardExpanded";
 import type { ResultData } from "@/components/testing/CheckpointCardExpanded";
@@ -45,7 +45,6 @@ export default function ScenarioPage({
   const [previousRoundResults, setPreviousRoundResults] = useState<
     Record<string, { status: string; round: number }>
   >({});
-  const [assignedPaths, setAssignedPaths] = useState<Path[]>(["core"]);
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [currentRound, setCurrentRound] = useState(1);
@@ -61,16 +60,13 @@ export default function ScenarioPage({
       }),
       fetch("/api/results").then((r) => r.json()),
       fetch("/api/results?all_rounds=true").then((r) => r.json()),
-      fetch("/api/paths").then((r) => r.json()),
       fetch("/api/retests/mine").then((r) => r.ok ? r.json() : { requests: [] }),
     ])
-      .then(([, resultsData, allRoundsData, pathsData, retestData]) => {
+      .then(([, resultsData, allRoundsData, retestData]) => {
         setResults(resultsData.results ?? {});
         setCurrentRound(resultsData.current_round ?? 1);
         setPreviousRoundResults(resultsData.previous_round_results ?? {});
         setAllRoundResults(allRoundsData.results ?? []);
-        const paths = pathsData.paths ?? [];
-        setAssignedPaths(["core", ...paths] as Path[]);
         setRetestRequests(
           (retestData.requests ?? []).filter((r: RetestRequest) => r.status === "pending")
         );
@@ -176,20 +172,15 @@ export default function ScenarioPage({
     );
   }
 
-  const relevantCheckIds = getCheckIdsForPaths(scenario, assignedPaths);
-  const totalChecks = relevantCheckIds.length;
-  const tested = relevantCheckIds.filter((id) => results[id]).length;
-  const failed = relevantCheckIds.filter(
+  const allCheckIds = scenario.steps.flatMap((step) => step.checks.map((c) => c.id));
+  const totalChecks = allCheckIds.length;
+  const tested = allCheckIds.filter((id) => results[id]).length;
+  const failed = allCheckIds.filter(
     (id) => results[id]?.status === "fail" || results[id]?.status === "retest_fail"
   ).length;
   const percent = totalChecks > 0 ? (tested / totalChecks) * 100 : 0;
 
-  const totalAll = getScenarioCheckCount(scenario);
-  const allCheckIds = scenario.steps.flatMap((step) => step.checks.map((c) => c.id));
-  const testedAll = allCheckIds.filter((id) => results[id]).length;
-
   const step = scenario.steps[activeStep];
-  const isStepAssigned = assignedPaths.includes(step.path);
 
   return (
     <div className="min-h-screen">
@@ -234,9 +225,7 @@ export default function ScenarioPage({
               <p className="text-sm font-semibold text-gray-700">
                 {tested}/{totalChecks}
               </p>
-              <p className="text-xs text-gray-400">
-                tested{totalChecks !== totalAll && ` (${testedAll}/${totalAll} all)`}
-              </p>
+              <p className="text-xs text-gray-400">tested</p>
             </div>
           </div>
 
@@ -263,7 +252,6 @@ export default function ScenarioPage({
                 scenarioColor={scenario.color}
                 results={results}
                 onClick={() => setActiveStep(i)}
-                dimmed={!assignedPaths.includes(s.path)}
               />
             ))}
           </div>
@@ -286,20 +274,8 @@ export default function ScenarioPage({
           <PathBadge path={step.path} />
         </div>
 
-        {/* Unassigned step notice */}
-        {!isStepAssigned && (
-          <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-            <p className="text-xs text-gray-500">
-              Not assigned to you — expand to test anyway
-            </p>
-          </div>
-        )}
-
         {/* Checkpoints */}
-        <div
-          className="space-y-3"
-          style={{ opacity: isStepAssigned ? 1 : 0.6 }}
-        >
+        <div className="space-y-3">
           {step.checks.map((check, checkIdx) => {
             const retestReq = retestRequests.find((r) => r.check_id === check.id);
             return (

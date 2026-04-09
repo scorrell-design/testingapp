@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { Scenario, Path } from "@/lib/scenarios";
-import { getScenarioCheckCount, getScenarioPaths, getCheckIdsForPaths } from "@/lib/scenarios";
+import type { Scenario } from "@/lib/scenarios";
+import { getScenarioPaths } from "@/lib/scenarios";
 import ProgressBar from "./ProgressBar";
 import PathBadge from "./PathBadge";
 
@@ -12,28 +12,21 @@ export default function ScenarioCard({
   scenario,
   index,
   results,
-  assignedPaths,
 }: {
   scenario: Scenario;
   index: number;
   results: ResultMap;
-  assignedPaths: Path[];
 }) {
   const scenarioPaths = getScenarioPaths(scenario);
-  const relevantCheckIds = getCheckIdsForPaths(scenario, assignedPaths);
-  const totalChecks = relevantCheckIds.length;
-
   const allCheckIds = scenario.steps.flatMap((step) =>
     step.checks.map((c) => c.id)
   );
+  const totalChecks = allCheckIds.length;
 
-  const tested = relevantCheckIds.filter((id) => results[id]).length;
-  const passed = relevantCheckIds.filter((id) => results[id]?.status === "pass").length;
-  const failed = relevantCheckIds.filter((id) => results[id]?.status === "fail").length;
+  const tested = allCheckIds.filter((id) => results[id]).length;
+  const passed = allCheckIds.filter((id) => results[id]?.status === "pass").length;
+  const failed = allCheckIds.filter((id) => results[id]?.status === "fail").length;
   const percent = totalChecks > 0 ? (tested / totalChecks) * 100 : 0;
-
-  const totalAll = getScenarioCheckCount(scenario);
-  const testedAll = allCheckIds.filter((id) => results[id]).length;
 
   return (
     <Link href={`/scenario/${scenario.id}`}>
@@ -83,11 +76,6 @@ export default function ScenarioCard({
           <span>
             {tested}/{totalChecks} tested
           </span>
-          {totalChecks !== totalAll && (
-            <span className="text-gray-300">
-              ({testedAll}/{totalAll} all paths)
-            </span>
-          )}
           {passed > 0 && (
             <span className="text-status-pass">{passed} passed</span>
           )}

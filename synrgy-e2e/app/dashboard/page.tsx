@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { scenarios, getCheckIdsForPaths } from "@/lib/scenarios";
-import type { Path } from "@/lib/scenarios";
+import { scenarios } from "@/lib/scenarios";
 import ScenarioCard from "@/components/ScenarioCard";
 import StatCard from "@/components/StatCard";
 import NotificationBell from "@/components/notifications/NotificationBell";
@@ -22,7 +21,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const [tester, setTester] = useState<Tester | null>(null);
   const [results, setResults] = useState<ResultMap>({});
-  const [assignedPaths, setAssignedPaths] = useState<Path[]>(["core"]);
   const [loading, setLoading] = useState(true);
   const [showReset, setShowReset] = useState(false);
   const [currentRound, setCurrentRound] = useState(1);
@@ -37,16 +35,13 @@ export default function DashboardPage() {
         return r.json();
       }),
       fetch("/api/results").then((r) => r.json()),
-      fetch("/api/paths").then((r) => r.json()),
       fetch("/api/round").then((r) => r.json()),
       fetch("/api/assignments/mine").then((r) => r.ok ? r.json() : { assignments: [] }),
       fetch("/api/retests/mine").then((r) => r.ok ? r.json() : { requests: [] }),
     ])
-      .then(([authData, resultsData, pathsData, roundData, assignData, retestData]) => {
+      .then(([authData, resultsData, roundData, assignData, retestData]) => {
         setTester(authData.tester);
         setResults(resultsData.results ?? {});
-        const paths = pathsData.paths ?? [];
-        setAssignedPaths(["core", ...paths] as Path[]);
         setCurrentRound(roundData.current_round ?? 1);
         setMyAssignments(assignData.assignments ?? []);
         const pending = (retestData.requests ?? []).filter(
@@ -106,7 +101,7 @@ export default function DashboardPage() {
   const displayScenarios = isAdmin ? scenarios : assignedScenarios;
 
   const relevantCheckIds = displayScenarios.flatMap((s) =>
-    getCheckIdsForPaths(s, assignedPaths)
+    s.steps.flatMap((step) => step.checks.map((c) => c.id))
   );
   const totalChecks = relevantCheckIds.length;
   const tested = relevantCheckIds.filter((id) => results[id]).length;
@@ -265,7 +260,6 @@ export default function DashboardPage() {
                     scenario={scenario}
                     index={i}
                     results={results}
-                    assignedPaths={assignedPaths}
                   />
                 </div>
               );

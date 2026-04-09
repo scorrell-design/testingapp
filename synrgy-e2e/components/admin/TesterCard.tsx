@@ -78,11 +78,16 @@ export default function TesterCard({
         <span className="text-gray-400">{tester.skipped} skipped</span>
       </div>
 
-      {tester.lastActive && (
-        <p className="mt-1 text-[10px] text-gray-400">
-          Last active: {new Date(tester.lastActive).toLocaleDateString()}
-        </p>
-      )}
+      <div className="mt-2 flex items-center justify-between">
+        {tester.lastActive && (
+          <p className="text-[10px] text-gray-400">
+            Last active: {new Date(tester.lastActive).toLocaleDateString()}
+          </p>
+        )}
+        <span className="text-[11px] font-medium text-brand-navy">
+          View full results &rarr;
+        </span>
+      </div>
     </button>
   );
 }

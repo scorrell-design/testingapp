@@ -32,7 +32,6 @@ export default function StepPill({
   scenarioColor,
   results,
   onClick,
-  dimmed,
 }: {
   step: Step;
   stepIndex: number;
@@ -40,7 +39,6 @@ export default function StepPill({
   scenarioColor: string;
   results: ResultMap;
   onClick: () => void;
-  dimmed?: boolean;
 }) {
   const status = getStepStatus(step, results);
 
@@ -54,13 +52,11 @@ export default function StepPill({
               borderColor: scenarioColor,
               backgroundColor: scenarioColor + "12",
               color: scenarioColor,
-              opacity: dimmed ? 0.5 : 1,
             }
           : {
               borderColor: "#e5e7eb",
               backgroundColor: "transparent",
               color: "#6b7280",
-              opacity: dimmed ? 0.5 : 1,
             }
       }
     >
