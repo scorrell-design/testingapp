@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
 import { requireAdmin } from "@/lib/admin-guard";
 import {
   sendAssignmentEmail,
@@ -6,6 +7,61 @@ import {
   sendRetestRequestedEmail,
   sendRetestCompletedEmail,
 } from "@/lib/email";
+
+export async function GET() {
+  const { error, tester } = await requireAdmin();
+  if (error) return error;
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+
+  if (!apiKey) {
+    return NextResponse.json({
+      ok: false,
+      diagnosis: "RESEND_API_KEY is not set in environment variables",
+      env: { hasKey: false, fromEmail },
+    });
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const result = await resend.emails.send({
+      from: fromEmail,
+      to: [tester!.email],
+      subject: "SYNRGY Test — Diagnosis",
+      html: "<p>If you see this, email is working.</p>",
+    });
+
+    return NextResponse.json({
+      ok: true,
+      diagnosis: "Email sent successfully",
+      result,
+      env: {
+        hasKey: true,
+        keyPrefix: apiKey.slice(0, 8) + "...",
+        fromEmail,
+        toEmail: tester!.email,
+      },
+    });
+  } catch (err: unknown) {
+    const errObj = err as Record<string, unknown>;
+    return NextResponse.json({
+      ok: false,
+      diagnosis: "Resend API call failed",
+      error: {
+        message: errObj?.message ?? String(err),
+        name: errObj?.name,
+        statusCode: errObj?.statusCode,
+      },
+      env: {
+        hasKey: true,
+        keyPrefix: apiKey.slice(0, 8) + "...",
+        fromEmail,
+        toEmail: tester!.email,
+      },
+    });
+  }
+}
 
 export async function POST(request: NextRequest) {
   const { error, tester } = await requireAdmin();
