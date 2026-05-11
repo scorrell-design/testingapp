@@ -11,6 +11,7 @@ export type Check = {
   failureGuidance?: string;
   dependsOn?: string[];
   estimatedMinutes?: number;
+  notes?: string;
 };
 
 export type Step = {
@@ -1192,1199 +1193,2389 @@ export const scenarios: Scenario[] = [
 
   // ─── NEW SCENARIO: Registration & login flows ───
   {
-    id: "registration-login",
-    persona: "Member",
-    icon: "L",
-    color: "#0C447C",
-    bg: "#E6F1FB",
-    title: "App registration & login",
-    summary:
-      "Member registers for the first time, verifies email, logs in, and tests password reset. Covers both success and failure paths.",
-    steps: [
+    "id": "registration-login",
+    "persona": "Member",
+    "icon": "L",
+    "color": "#0C447C",
+    "bg": "#E6F1FB",
+    "title": "App registration & login",
+    "summary": "Member registers for the first time (primary or dependent), verifies CB email, logs in, resets password, and tests AuthGate routing. Covers compliant error messaging and post-install re-authentication.",
+    "steps": [
       {
-        title: "Failed registration",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Initial entry & invalid attempt",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "rl-1",
-            text: "Attempt to register with invalid information",
-            expected: "Tap 'Sign Up'. You are taken to a 'Find Your Account' screen. There is a button to log in instead, which takes you to login credentials — hitting back returns you to 'Find Your Account'. All fields must be filled before you can continue. Upon entering random/invalid info, you see a screen saying your information was not found with a 'Try Again' button. Tapping 'Try Again' takes you back to the form.",
-            preReqs: "App freshly installed, not logged in.",
+            "id": "rl-1",
+            "text": "Attempt to register with invalid member info",
+            "expected": "Tap 'Create Account' from the onboarding auth-choice screen. You land on a 'Find Your Account' search form. Entering random/invalid lastName + DOB + zip returns an error state with a 'Try Again' button. Tapping back returns to the form. All fields must be filled before the Find My Plan button is tappable.",
+            "preReqs": "App freshly installed, not logged in. Reached the Sign Up flow.",
+            "whereToLook": "synrgy-app/app/signup.tsx:457-507",
+            "estimatedMinutes": 3
           },
           {
-            id: "rl-2",
-            text: "Verify field-level validation on registration form",
-            expected: "Leaving any required field blank prevents submission. DOB field accepts only valid date format. Zip code field accepts only 5-digit numeric input. Last name field is case-insensitive (test with uppercase and lowercase — both should work).",
-            preReqs: "On the 'Find Your Account' screen.",
+            "id": "rl-2",
+            "text": "Verify field-level validation on Find Your Account form",
+            "expected": "Leaving any required field blank prevents submission. DOB picker only accepts valid calendar dates. Zip field accepts only 5-digit numeric. Last name field accepts both cases (test with uppercase and lowercase variants of your name).",
+            "preReqs": "On the 'Find Your Account' screen in Sign Up.",
+            "whereToLook": "synrgy-app/app/signup.tsx:340-383",
+            "estimatedMinutes": 3
           },
-        ],
+          {
+            "id": "rl-9",
+            "text": "Choose account type at start of signup wizard",
+            "expected": "First step of Create Account flow shows two cards: 'I am the primary member' and 'I am a dependent'. Picking one routes you into the matching find-member flow. The other card is dismissed.",
+            "preReqs": "On the first step of the Create Account wizard.",
+            "whereToLook": "synrgy-app/app/signup.tsx:415-453",
+            "estimatedMinutes": 2
+          }
+        ]
       },
       {
-        title: "Successful registration",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Successful primary-member registration",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "rl-3",
-            text: "Register with valid test credentials",
-            expected: "After entering valid info, you are taken to a 'Create Your Account' screen to set email and password. You can navigate back and forth between pages. After creating credentials, you are taken to an email verification screen. After verifying email, you are taken to the onboarding flow.",
-            preReqs: "Valid member with eligibility record. Test info: DOB 01/01/2000, your actual last name, zip 12345.",
+            "id": "rl-3",
+            "text": "Register with valid primary-member test credentials",
+            "expected": "After entering valid info (your actual last name, DOB 01/01/2000, ZIP 12345), the plan-confirm step appears showing your group name and last name. Tap 'This is me, continue'. You then reach 'Create Your Account' to set name, email, and password (minimum 8 characters). Eye toggle reveals/hides password. Create Account button becomes active once all fields valid.",
+            "preReqs": "Test member record exists with DOB 01/01/2000, ZIP 12345, your actual last name. App is in fresh signup state.",
+            "whereToLook": "synrgy-app/app/signup.tsx:614-687",
+            "estimatedMinutes": 5
           },
           {
-            id: "rl-4",
-            text: "Email verification completes successfully",
-            expected: "Verification email arrives within 2 minutes. Clicking the link in the email (or entering the code) returns you to the app. App proceeds to onboarding.",
-            preReqs: "Just completed account credential creation.",
+            "id": "rl-10",
+            "text": "Confirm-plan step lets you back out if the plan shown is wrong",
+            "expected": "On the 'This is me / Not me' confirmation, tapping 'Not me, try again' returns you to the Find Your Account search form with fields cleared.",
+            "preReqs": "Just submitted a valid find-member query and the confirm step is visible.",
+            "whereToLook": "synrgy-app/app/signup.tsx:473-507",
+            "estimatedMinutes": 2
           },
-        ],
+          {
+            "id": "rl-4",
+            "text": "Email verification code arrives and completes within 2 minutes",
+            "expected": "After creating credentials, a 6-digit code verification screen appears. The verification email arrives within 2 minutes. Entering the 6-digit code activates the Verify button. On successful verify, the app proceeds to the onboarding flow.",
+            "preReqs": "Just completed Create Your Account credentials step.",
+            "whereToLook": "synrgy-app/app/signup.tsx:691-737",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "rl-11",
+            "text": "Resend verification code if it does not arrive",
+            "expected": "On the 6-digit code screen, tapping 'Resend Code' triggers a new email. A new code arrives. The previous code is invalidated; only the most recent code works to verify.",
+            "preReqs": "On the verify-CB-email screen with no code received yet.",
+            "whereToLook": "synrgy-app/app/signup.tsx:728-736 (Resend button); 316 (resendMemberCode call)",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "rl-12",
+            "text": "Wrong verification code shows an error and allows retry",
+            "expected": "Entering an incorrect 6-digit code surfaces an error banner without consuming the screen. The user can correct the digits and tap Verify again, or request a resend.",
+            "preReqs": "On the verify-CB-email screen.",
+            "whereToLook": "synrgy-app/app/signup.tsx:286-310 (verifyMemberCode); 698 (error banner)",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "rl-13",
+            "text": "Account-already-exists triggers automatic recovery",
+            "expected": "If you sign up with an email already used on a prior incomplete signup, the app catches the 'already exists' error and silently logs you in to continue the CB-link flow. The user does not see a hard error; they progress to the find-member step (if not yet completed).",
+            "preReqs": "A prior signup attempt left a Synrgy auth account without a linked CB member.",
+            "whereToLook": "synrgy-app/app/signup.tsx:209-216",
+            "estimatedMinutes": 4
+          }
+        ]
       },
       {
-        title: "Login flows",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Dependent signup",
+        "platform": "SYNRGY app",
+        "path": "path-b",
+        "checks": [
           {
-            id: "rl-5",
-            text: "Log in with valid credentials",
-            expected: "Tap 'Login'. Enter email and password. App takes you to the home screen (or onboarding if not yet completed).",
-            preReqs: "Account already created.",
+            "id": "rl-14",
+            "text": "Dependent signup: find the primary member first",
+            "expected": "Selecting 'I am a dependent' on the account-type step routes you to a Find Your Account form for the PRIMARY member (last name, DOB, ZIP). On success, the plan-confirm step shows the primary's group.",
+            "preReqs": "Fresh signup, picked 'I am a dependent'.",
+            "whereToLook": "synrgy-app/app/signup.tsx:159-179 (dependent flow start); 195-196 (checkForPrimary)",
+            "estimatedMinutes": 3
           },
           {
-            id: "rl-6",
-            text: "Attempt login with invalid credentials",
-            expected: "Entering wrong email/password shows an error message stating credentials are invalid. Does not reveal whether the email exists in the system.",
-            preReqs: "On the login screen.",
+            "id": "rl-15",
+            "text": "Dependent details form collects firstName, lastName, DOB, gender, relationship",
+            "expected": "After confirming the primary, a dependent-details form appears: First Name, Last Name, DOB picker, Gender M/F/O segmented control, Relationship spouse/child toggle. All fields required. Continue button activates when complete.",
+            "preReqs": "Plan-confirmed as a dependent of a real primary member.",
+            "whereToLook": "synrgy-app/app/signup.tsx:511-610",
+            "estimatedMinutes": 4
           },
-        ],
+          {
+            "id": "rl-16",
+            "text": "Dependent flow completes: create credentials + verify email + land on onboarding",
+            "expected": "After dependent details, the Create Your Account step appears. Following credentials creation and email verification, the app lands on the onboarding flow (same as primary).",
+            "preReqs": "Just completed dependent details.",
+            "whereToLook": "synrgy-app/app/signup.tsx:237-254 (verifyDependent); 286-310 (verify code)",
+            "estimatedMinutes": 5
+          }
+        ]
       },
       {
-        title: "Password reset",
-        platform: "SYNRGY app",
-        path: "path-a",
-        checks: [
+        "title": "Verify-member (post-signup, required mode)",
+        "platform": "SYNRGY app",
+        "path": "path-a",
+        "checks": [
           {
-            id: "rl-7",
-            text: "Reset password for a valid account",
-            expected: "Tap 'Forgot password' link. You are prompted to enter your email. A reset code is generated. You receive an email with the code. Entering the code lets you set a new password. You can log in with the new password.",
-            preReqs: "On the login screen, account exists.",
+            "id": "rl-17",
+            "text": "If signup succeeded but CB link failed, app routes to verify-member with no back button",
+            "expected": "When AuthGate detects an authenticated user with no linked CB account, the app force-navigates to a verify-member screen. The header has NO back button. A 'Log Out' option is shown instead. The user must either complete CB linking or log out.",
+            "preReqs": "Authenticated Synrgy account exists but CB link was not completed during signup.",
+            "whereToLook": "synrgy-app/app/_layout.tsx:78-79 (AuthGate routing); synrgy-app/app/verify-member.tsx:337-348 (required mode)",
+            "estimatedMinutes": 3
           },
           {
-            id: "rl-8",
-            text: "Attempt password reset for a non-existent email",
-            expected: "Entering an email that doesn't exist in the system does NOT send a reset email. The app should NOT reveal whether the email exists (security). Show a generic message like 'If an account exists, you'll receive a reset email.'",
-            preReqs: "On the login screen.",
-          },
-        ],
+            "id": "rl-18",
+            "text": "Logout from required verify-member returns to onboarding",
+            "expected": "Tapping Log Out clears auth state and returns the user to the onboarding auth-choice step.",
+            "preReqs": "On verify-member in required mode.",
+            "whereToLook": "synrgy-app/app/verify-member.tsx:338-348",
+            "estimatedMinutes": 2
+          }
+        ]
       },
-    ],
+      {
+        "title": "Login flows",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "rl-5",
+            "text": "Log in with valid credentials",
+            "expected": "From the auth-choice step, tap Sign In. Enter email and password. On success, the app routes to the home screen (if onboarding is complete) or to the onboarding flow (if not).",
+            "preReqs": "Account already created. App in fresh state or logged out.",
+            "whereToLook": "synrgy-app/app/login.tsx:229-346",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "rl-6",
+            "text": "Invalid credentials show a generic error",
+            "expected": "Wrong email or password shows an inline error banner stating credentials are invalid. The error does NOT reveal whether the email is registered. The error message wording does not say 'no account found' or similar.",
+            "preReqs": "On the login screen.",
+            "whereToLook": "synrgy-app/app/login.tsx:254-257",
+            "estimatedMinutes": 2
+          },
+          {
+            "id": "rl-19",
+            "text": "Re-login on a returning user skips verify-member",
+            "expected": "After logging out and back in (same device), the user lands on home without seeing the verify-member screen. The Synrgy API auto-refreshes the CB token via /cb-session on every login.",
+            "preReqs": "User previously completed full signup + CB link. Has logged out.",
+            "whereToLook": "synrgy-app/app/_layout.tsx:78-89 (AuthGate); synrgy-app/services/auth-api.ts (cb-session)",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "rl-20",
+            "text": "Language toggle on login screen switches UI language",
+            "expected": "A language toggle pill is visible at the top of the login screen. Tapping it cycles through supported languages. All labeled UI elements re-render in the chosen language without app restart.",
+            "preReqs": "On the login screen.",
+            "whereToLook": "synrgy-app/app/login.tsx:248",
+            "estimatedMinutes": 2
+          }
+        ]
+      },
+      {
+        "title": "Password reset",
+        "platform": "SYNRGY app",
+        "path": "path-a",
+        "checks": [
+          {
+            "id": "rl-7",
+            "text": "Reset password for a valid account",
+            "expected": "Tap 'Forgot password?' on login. Enter your email. Tap Send Reset Code. A 6-digit code arrives by email. Enter the code, set a new password (minimum 8 characters), tap Reset Password. A success alert appears. You can log in with the new password.",
+            "preReqs": "Existing account email is accessible.",
+            "whereToLook": "synrgy-app/app/login.tsx:91-223",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "rl-8",
+            "text": "Password reset for unknown email handles failure gracefully",
+            "expected": "Entering an email not associated with any account: observe what the app shows. Document the exact UI message. NOTE: the current code surfaces an explicit forgotPasswordError if the API throws, which may signal the email is unknown. Flag the actual behavior in the notes field so we can decide whether to fix the UX.",
+            "preReqs": "On the Forgot Password email entry screen.",
+            "whereToLook": "synrgy-app/app/login.tsx:53-56 (forgotPassword handler); 91-145 (UI)",
+            "estimatedMinutes": 3,
+            "failureGuidance": "If the app reveals the email is unknown (e.g. 'no account found' message), record verbatim in notes — this is a UX gap that needs separate fix."
+          },
+          {
+            "id": "rl-21",
+            "text": "Password reset code validation: new password must be at least 8 characters",
+            "expected": "On the reset-code screen, entering a new password under 8 characters shows an inline validation hint and disables the Reset Password button.",
+            "preReqs": "Entered a valid reset code, on the new-password step.",
+            "whereToLook": "synrgy-app/app/login.tsx:69-85, 169",
+            "estimatedMinutes": 2
+          },
+          {
+            "id": "rl-22",
+            "text": "Wrong reset code shows error and allows retry",
+            "expected": "Entering a wrong 6-digit reset code surfaces resetError. The user can correct the code or re-request from the email screen.",
+            "preReqs": "On the reset-code entry screen.",
+            "whereToLook": "synrgy-app/app/login.tsx:62-86, 149-152",
+            "estimatedMinutes": 3
+          }
+        ]
+      }
+    ]
   },
 
   // ─── SCENARIO 7: Member app onboarding ───
   {
-    id: "member-onboard",
-    persona: "Member",
-    icon: "O",
-    color: "#993C1D",
-    bg: "#FAECE7",
-    title: "App onboarding & HRA",
-    summary:
-      "Member downloads the app, creates an account, completes the onboarding carousel, grants permissions, and finishes the Health Risk Assessment.",
-    steps: [
+    "id": "member-onboard",
+    "persona": "Member",
+    "icon": "O",
+    "color": "#993C1D",
+    "bg": "#FAECE7",
+    "title": "App onboarding & HRA",
+    "summary": "Member completes the onboarding flow (intro slides, video, auth, 5 permissions, income), then completes the multi-section Health Risk Assessment. Covers permission denial paths, AI Orb first interaction, and compliance language.",
+    "steps": [
       {
-        title: "App download & account creation",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "App install and launch",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mo-1",
-            text: "App installs and launches without errors",
-            expected: "Download the app from App Store (iOS) or Google Play (Android). The app installs without errors. Tapping the app icon launches it to the splash screen or login page within 3 seconds.",
-            preReqs: "Device has internet access and sufficient storage. App store account is signed in.",
-          },
-          {
-            id: "mo-2",
-            text: "Account creation links member to correct group, plan, and coverage tier",
-            expected: "After creating an account, check the member's profile in the admin portal. The account is linked to the correct group, plan name, and coverage tier that matches the census data.",
-            preReqs: "Member has completed registration. Admin portal access available for verification.",
-          },
-          {
-            id: "mo-3",
-            text: "Verification screens use cream background (#F5EDE1), not white",
-            expected: "ALL three verification screens (Confirm Your Information, Verify Your Contact Info, Enter Verification Code) display a warm cream background (#F5EDE1). The background is NOT pure white (#FFFFFF). Compare against a white reference — the cream should be visibly warm/tan. Check all three screens individually.",
-            preReqs: "In the account verification flow.",
-          },
-          {
-            id: "mo-4",
-            text: "CTA buttons are brand orange (#C95A38) on all setup screens",
-            expected: "On every setup screen (registration, verification, permissions), the primary CTA button is brand orange (#C95A38). Not red, not coral, not a different shade. Use a color picker tool if needed to verify the exact hex.",
-            preReqs: "Navigating through setup screens.",
-          },
-          {
-            id: "mo-5",
-            text: "Typeface is Geist throughout; headline color is #005F78 dark teal",
-            expected: "All text uses the Geist typeface (check in device accessibility settings or visually). Headlines and section titles use the dark teal color #005F78. Body text may be darker/lighter but headlines are specifically #005F78.",
-            preReqs: "On any setup or onboarding screen.",
-          },
-        ],
+            "id": "mo-1",
+            "text": "App installs and launches without errors",
+            "expected": "Install the SYNRGY app from App Store (iOS) or Google Play (Android). Tap the app icon. The splash screen appears within 3 seconds. No crash, no permission prompt before the splash, no white screen of death.",
+            "preReqs": "Device has internet access and sufficient storage.",
+            "whereToLook": "synrgy-app/app.json (bundle identifier, splash); synrgy-app/app/_layout.tsx (root)",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Permissions",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Visual conformance to v2 brand",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mo-6",
-            text: "Permission prompts fire in order: location → health data → notifications",
-            expected: "After account creation, the app presents three permission prompts in this exact order: (1) Location services, (2) Health/HealthKit data access, (3) Push notifications. They do not appear out of order or simultaneously.",
-            preReqs: "Account just created, entering the permissions flow.",
+            "id": "mo-3",
+            "text": "Background color is the warm v2 cream #F3EDE2 on all setup screens",
+            "expected": "ALL setup screens (signup wizard, verify-member, onboarding intro/video) display the v2 warm cream background #F3EDE2. Use a color picker tool. The background is NOT pure white #FFFFFF and is NOT the older cream #F5EDE1.",
+            "preReqs": "On any pre-home screen.",
+            "whereToLook": "synrgy-app/app.json:11 (backgroundColor); synrgy-app/constants/colors.ts",
+            "estimatedMinutes": 4
           },
           {
-            id: "mo-7",
-            text: "Granting all permissions proceeds to onboarding carousel",
-            expected: "After granting all three permissions (Allow for each), the app transitions to the onboarding carousel. No error screens, no repeated prompts, no blank screens.",
-            preReqs: "On the permission prompts, ready to grant all.",
+            "id": "mo-4",
+            "text": "Primary CTA color is v2 teal (confirm exact hex with creative)",
+            "expected": "Every primary CTA button (Sign Up, Continue, Verify, Activate) uses the v2 brand teal. Per code constants/colors.ts, primary is #0098A8. Per the brand-fork memory note, both Synrgy v2 and sister brands share #005F78. Verify with a color picker which hex the app actually renders. Record any deviation in notes.",
+            "preReqs": "Navigating through any setup screen with CTA visible.",
+            "whereToLook": "synrgy-app/constants/colors.ts (Colors.primary); app.json plugins/expo-notifications:color",
+            "estimatedMinutes": 4,
+            "failureGuidance": "If color is not in the #0098A8 / #005F78 family (e.g. orange #C95A38 from the pre-v2 palette), record verbatim and flag for design review."
           },
           {
-            id: "mo-8",
-            text: "Granted permissions persist across app restarts",
-            expected: "After granting all permissions, force-close the app and relaunch it. The app does NOT re-ask for permissions. Verify in device Settings that the permissions are still granted for SYNRGY.",
-            preReqs: "All permissions granted. Ready to force-close and relaunch app.",
-          },
-        ],
+            "id": "mo-5",
+            "text": "Typography is consistent across setup screens; headlines use dark teal #005F78",
+            "expected": "All headlines and section titles use the dark teal #005F78. Body text may be a darker neutral. Typography is consistent across all setup screens (no mixed system fonts). If a custom font is loaded (expo-font), it renders correctly without falling back to system fonts mid-screen.",
+            "preReqs": "On setup screens.",
+            "whereToLook": "synrgy-app/app.json:96 (expo-font plugin); synrgy-app/assets/fonts/; synrgy-app/constants/colors.ts",
+            "estimatedMinutes": 4
+          }
+        ]
       },
       {
-        title: "Permissions denied",
-        platform: "SYNRGY app",
-        path: "path-b",
-        checks: [
+        "title": "Onboarding intro and video",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mo-9",
-            text: "Denying location permission: app continues but location-based features are disabled",
-            expected: "Deny location permission when prompted. The app continues to the next permission prompt (does not crash or get stuck). Later, location-based features (e.g., Pharmacy Locator) show a graceful fallback (manual zip entry or message).",
-            preReqs: "On the location permission prompt.",
+            "id": "mo-14",
+            "text": "Onboarding intro renders 3 slide screens followed by 1 video screen",
+            "expected": "After install, the onboarding flow shows 3 intro slides (steps 0-2) with title, subtitle, and 3 feature cards each. Then 1 video screen (step 3). Each slide is readable, no overflow, no missing imagery.",
+            "preReqs": "First launch (or AsyncStorage @synrgy:onboarding_complete cleared).",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:291-305; synrgy-app/components/onboarding/IntroSlide.tsx; VideoScreen.tsx",
+            "estimatedMinutes": 4
           },
           {
-            id: "mo-10",
-            text: "Denying health data permission: app continues but body vitals and behavioral insights are unavailable",
-            expected: "Deny health data permission. The app continues. In the Vitals section, health data sync is not available. Behavioral insights section shows a message about enabling health data access.",
-            preReqs: "On the health data permission prompt.",
+            "id": "mo-15",
+            "text": "Pagination dots stay fixed at the bottom while content scrolls",
+            "expected": "While swiping through onboarding screens, the pagination dots remain fixed in position at the bottom. The active dot updates to reflect the current screen.",
+            "preReqs": "On the onboarding intro screens.",
+            "whereToLook": "synrgy-app/components/onboarding/ProgressDots.tsx",
+            "estimatedMinutes": 2
           },
           {
-            id: "mo-11",
-            text: "Denying notification permission: app continues but push nudges are not delivered",
-            expected: "Deny notification permission. The app continues to onboarding. Push notifications are not received (test by waiting for a scheduled nudge or triggering one manually). In-app features still work normally.",
-            preReqs: "On the notification permission prompt.",
+            "id": "mo-33",
+            "text": "Onboarding video plays from Mux HLS source",
+            "expected": "On the video step, a play overlay is visible. Tapping it streams the video from the Mux HLS source. Video plays in-line. After play completes, the Continue button is active.",
+            "preReqs": "On the onboarding video step.",
+            "whereToLook": "synrgy-app/components/onboarding/VideoScreen.tsx:39-84 (URL: stream.mux.com/1AmlO8pozv6ezYQeRaoc7fFHFJDqhNKrWjNLuIWWTq00.m3u8)",
+            "estimatedMinutes": 3
           },
           {
-            id: "mo-12",
-            text: "Member can re-enable permissions later from app settings",
-            expected: "After denying a permission, go to device Settings → SYNRGY app → toggle the permission on. The app now has access to the previously denied feature.",
-            preReqs: "A permission was denied during onboarding.",
+            "id": "mo-34",
+            "text": "Skip on video shows a reminder the first time, then allows skip",
+            "expected": "Tapping Skip on the video step (without having played the video) surfaces a reminder text 'Consider watching the intro video' or similar. Tapping Skip a second time allows the user to proceed without watching.",
+            "preReqs": "On the onboarding video step.",
+            "whereToLook": "synrgy-app/components/onboarding/VideoScreen.tsx:40-44, 81-84",
+            "estimatedMinutes": 3
           },
           {
-            id: "mo-13",
-            text: "Re-enabling a permission activates the associated features immediately",
-            expected: "After re-enabling a permission in device settings, return to the app. The associated feature (location/vitals/notifications) starts working immediately without needing to restart the app or re-onboard.",
-            preReqs: "A previously denied permission was just re-enabled in device settings.",
-          },
-        ],
+            "id": "mo-16",
+            "text": "AI Orb appears as a dimensional teal radial gradient sphere",
+            "expected": "On the carousel screen that introduces the AI Orb (or on the home screen post-onboarding), the Orb renders as a dimensional/3D-looking sphere with a radial teal gradient. It is NOT flat, NOT purple, NOT red, NOT a plain circle.",
+            "preReqs": "On the carousel screen with the Orb illustration or on home screen post-onboarding.",
+            "whereToLook": "synrgy-app/components/Orb.tsx:194-203 (radial gradient SVG)",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Onboarding carousel",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Auth choice from onboarding",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mo-14",
-            text: "All 5 carousel screens render correctly",
-            expected: "Swipe through all 5 onboarding carousel screens. Each screen has a headline, body text, and illustration/graphic. No blank screens, no missing images, no text overflow. Content is readable and properly formatted.",
-            preReqs: "On the first screen of the onboarding carousel.",
-          },
-          {
-            id: "mo-15",
-            text: "Pagination dots stay fixed at bottom (don't scroll with content)",
-            expected: "While swiping through carousel screens, the pagination dots at the bottom remain fixed in position. They do NOT scroll with the content. The active dot updates to reflect the current screen.",
-            preReqs: "On the onboarding carousel.",
-          },
-          {
-            id: "mo-16",
-            text: "AI Orb is a dimensional teal radial gradient sphere (not flat/purple/red)",
-            expected: "On the carousel screen showing the AI Orb, the orb appears as a dimensional/3D-looking teal radial gradient sphere. It is NOT flat, NOT purple, NOT red. The gradient gives it depth and the teal color matches the brand.",
-            preReqs: "On the carousel screen featuring the AI Orb.",
-          },
-          {
-            id: "mo-17",
-            text: "Suggestion bubble spacing is correct (not squished)",
-            expected: "If suggestion bubbles appear on a carousel screen, they have proper spacing between them — not touching, not overlapping, not squished. Each bubble is readable and tappable.",
-            preReqs: "On a carousel screen with suggestion bubbles.",
-          },
-          {
-            id: "mo-18",
-            text: "All copy uses compliant language ('may correspond to covered events')",
-            expected: "Read ALL text on ALL 5 carousel screens. Any reference to benefits uses compliant language like 'may correspond to covered events'. Search for non-compliant phrases.",
-            preReqs: "On the onboarding carousel.",
-          },
-          {
-            id: "mo-19",
-            text: "No instance of 'qualify for benefits' or 'earn benefits' anywhere",
-            expected: "Read ALL text on ALL 5 carousel screens carefully. The phrases 'qualify for benefits' and 'earn benefits' do NOT appear anywhere. These phrases are non-compliant and must not be used.",
-            preReqs: "On the onboarding carousel.",
-          },
-        ],
+            "id": "mo-35",
+            "text": "Auth-choice step offers Sign In and Create Account paths",
+            "expected": "On step 4 of onboarding, two cards are visible: Sign In (LogIn icon) → routes to /login; Create Account (UserPlus icon) → routes to /signup. Tapping back returns to the onboarding video step.",
+            "preReqs": "Onboarding has reached step 4 (auth choice).",
+            "whereToLook": "synrgy-app/components/onboarding/AuthChoice.tsx:19-41",
+            "estimatedMinutes": 2
+          }
+        ]
       },
       {
-        title: "Complete HRA — happy path",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Permission flow — 5 permissions in fixed order",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mo-20",
-            text: "Tapping 'Complete Your Health Risk Assessment' opens HRA flow",
-            expected: "On the home screen or a prompt card, tap 'Complete Your Health Risk Assessment' (or similar CTA). The HRA flow opens — either an intro screen or the first question. No errors or blank screens.",
-            preReqs: "On the home screen after completing onboarding. HRA not yet started.",
+            "id": "mo-36",
+            "text": "Permission explainer step lists all 5 upcoming permissions",
+            "expected": "Step 5 of onboarding (post-auth) shows the Permission Explainer screen. It lists each upcoming permission (Health, Microphone, Camera, Notifications, Location) with an icon and one-line description. A Next button advances to the first permission request.",
+            "preReqs": "Just authenticated for the first time. On step 5.",
+            "whereToLook": "synrgy-app/components/onboarding/PermissionExplainer.tsx:27-54",
+            "estimatedMinutes": 3
           },
           {
-            id: "mo-21",
-            text: "HRA intro screen explains what it is and why it matters",
-            expected: "Before the questions begin, an intro screen explains what the HRA is (health assessment), why it matters (personalized health profile), and approximately how long it takes. A 'Start' or 'Continue' button proceeds.",
-            preReqs: "Just opened the HRA flow.",
+            "id": "mo-6",
+            "text": "Permission prompts fire in fixed order: Health → Microphone → Camera → Notifications → Location",
+            "expected": "After the explainer, the OS permission prompts appear ONE AT A TIME in this exact order: (1) Health/Sahha, (2) Microphone, (3) Camera, (4) Notifications, (5) Location. Each is its own PermissionScreen inside the app, with a Continue Without (skip) button. Web platform excludes Health.",
+            "preReqs": "Tapped Next on the Permission Explainer.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:175-216 (handlers); 326-337 (loop); 102 (web filter)",
+            "estimatedMinutes": 5
           },
           {
-            id: "mo-22",
-            text: "Chat Q&A flow presents all questions and accepts answers",
-            expected: "The HRA presents questions in a chat-style interface. Each question can be answered by tapping options or typing. After answering, the next question appears. The flow progresses without getting stuck.",
-            preReqs: "On the HRA questionnaire.",
+            "id": "mo-7",
+            "text": "Granting all 5 permissions proceeds to the income step",
+            "expected": "Granting all permissions in turn advances onboarding to the Income & Household step (step 11). No errors, no repeated prompts.",
+            "preReqs": "On the first permission screen, ready to allow all.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:326-337",
+            "estimatedMinutes": 5
           },
           {
-            id: "mo-23",
-            text: "Processing animation plays after final question",
-            expected: "After answering the last question, a processing/loading animation plays (e.g., spinner, progress bar, animated graphic). It lasts a reasonable time (5-15 seconds) before showing results.",
-            preReqs: "Just answered the final HRA question.",
+            "id": "mo-37",
+            "text": "Permission denial modal shows OS-appropriate buttons",
+            "expected": "Denying any permission triggers a denial modal. On iOS, the modal shows 'Open Settings' and 'Continue Without'. On Android, it shows 'Try Again' and 'Continue Without'. Modal is dismissable.",
+            "preReqs": "On any permission screen, deny once.",
+            "whereToLook": "synrgy-app/components/onboarding/PermissionScreen.tsx:173-205",
+            "estimatedMinutes": 4
           },
           {
-            id: "mo-24",
-            text: "Results screen shows personalized health profile",
-            expected: "After processing, a results screen displays a personalized health profile with insights, risk categories, or scores based on the answers provided. Content is specific to the user's responses, not generic.",
-            preReqs: "HRA processing has completed.",
+            "id": "mo-38",
+            "text": "Second-time denial auto-advances without showing the modal again",
+            "expected": "If a permission has already been denied once and the modal dismissed, denying it again silently advances to the next permission screen.",
+            "preReqs": "Already denied a permission once on the current onboarding pass.",
+            "whereToLook": "synrgy-app/components/onboarding/PermissionScreen.tsx:48-77",
+            "estimatedMinutes": 3
           },
           {
-            id: "mo-25",
-            text: "HRA completion is recorded as a covered event",
-            expected: "In the admin portal, check the member's covered events log. A new entry for 'HRA Completion' (or similar) appears with a timestamp matching when you completed the HRA.",
-            preReqs: "HRA was completed. Admin portal access for verification.",
+            "id": "mo-39",
+            "text": "Each permission screen has a Continue Without / Skip option",
+            "expected": "Every PermissionScreen has a tappable Skip / Continue Without link visible at the bottom. Tapping it advances to the next permission without granting.",
+            "preReqs": "On any permission screen.",
+            "whereToLook": "synrgy-app/components/onboarding/PermissionScreen.tsx:167-169",
+            "estimatedMinutes": 2
           },
-        ],
+          {
+            "id": "mo-40",
+            "text": "Granting Notifications enables default push types",
+            "expected": "Granting Notifications triggers the app to register the Expo push token with the CB API and enable the default push types 'visitReminder' and 'videoReminder'. Other push types are off by default. Verify in Notification Settings post-onboarding.",
+            "preReqs": "Notifications permission granted during onboarding.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:195-212; synrgy-app/constants/onboarding.ts (DEFAULT_ENABLED_TYPES)",
+            "estimatedMinutes": 4
+          }
+        ]
       },
       {
-        title: "Skip HRA / delayed completion",
-        platform: "SYNRGY app",
-        path: "path-b",
-        checks: [
+        "title": "Permission denial paths",
+        "platform": "SYNRGY app",
+        "path": "path-b",
+        "checks": [
           {
-            id: "mo-26",
-            text: "Member can skip HRA and proceed to the app dashboard",
-            expected: "On the HRA prompt, tap 'Skip', 'Later', or 'X' to dismiss. The app proceeds to the main dashboard without errors. The skip does not break any app functionality.",
-            preReqs: "On the HRA prompt after onboarding.",
+            "id": "mo-9",
+            "text": "Denying location: app continues; pharmacy locator falls back to default region",
+            "expected": "Deny the Location prompt. Onboarding continues to the next step. Later, opening Pharmacy Locator centers the map on the default region (Charleston SC area) without an explicit error message. Manual zip entry still works.",
+            "preReqs": "On the Location permission prompt.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:214-216; synrgy-app/app/pharmacy-locator.tsx:45-72",
+            "estimatedMinutes": 4
           },
           {
-            id: "mo-27",
-            text: "HRA prompt remains accessible from the dashboard for later completion",
-            expected: "After skipping the HRA, a card, banner, or menu item on the dashboard still provides access to start the HRA. It is clearly visible and not buried.",
-            preReqs: "Skipped the HRA. On the main dashboard.",
+            "id": "mo-10",
+            "text": "Denying Health (Sahha): app continues; vitals dashboard chip stays empty",
+            "expected": "Deny the Health permission. Onboarding continues. The Sahha SDK is not authenticated. Background health sync to CleverHealth does not occur. Foreground face-scan still works (different SDK). Useful Guidance based on Sahha events does not populate.",
+            "preReqs": "On the Health permission prompt.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:175-185",
+            "estimatedMinutes": 4
           },
           {
-            id: "mo-28",
-            text: "Member can complete HRA at any point after onboarding",
-            expected: "Tap the HRA prompt on the dashboard. The HRA flow opens and can be completed successfully. The results screen appears after completion, same as if done during onboarding.",
-            preReqs: "Previously skipped the HRA. On the dashboard with HRA prompt visible.",
+            "id": "mo-11",
+            "text": "Denying Notifications: app continues; no push delivered",
+            "expected": "Deny the Notifications permission. Onboarding continues. Later, no push notifications arrive from SYNRGY. In-app features continue normally.",
+            "preReqs": "On the Notifications permission prompt.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:195-212",
+            "estimatedMinutes": 4
           },
           {
-            id: "mo-29",
-            text: "Nudge to complete HRA fires after configured delay (e.g., 24 hours)",
-            expected: "After skipping the HRA, a push notification or in-app nudge appears after the configured delay (e.g., 24 hours later). The nudge reminds the member to complete the HRA and provides a link.",
-            preReqs: "Skipped HRA. Notifications enabled. Wait for the configured delay.",
+            "id": "mo-41",
+            "text": "Denying microphone: voice on home screen does not work but app does not crash",
+            "expected": "Deny the Microphone permission. Onboarding continues. On the home screen, tapping the Orb to initiate a voice session shows an in-app prompt that microphone access is needed. The app does not crash.",
+            "preReqs": "On the Microphone permission prompt.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:187-189; synrgy-app/app/index.tsx (voice handler)",
+            "estimatedMinutes": 3
           },
-        ],
+          {
+            "id": "mo-42",
+            "text": "Denying camera: face vitals scan and VUC video unavailable",
+            "expected": "Deny the Camera permission. Onboarding continues. Tapping Start Scan on /vitals-scan or starting a VUC session prompts again for camera access via the OS. If denied permanently, the app does not crash and offers a path back.",
+            "preReqs": "On the Camera permission prompt.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:191-193; synrgy-app/app/vitals-scanner.native.tsx",
+            "estimatedMinutes": 4
+          }
+        ]
       },
       {
-        title: "AI Orb first interaction",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Permission persistence",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mo-30",
-            text: "First AI Orb interaction includes transparency disclaimer per Responsible AI Manifesto",
-            expected: "The first time you interact with the AI Orb in this session, the orb includes a disclosure that it is an AI assistant. The disclaimer is natural, not robotic. Per the Responsible AI Manifesto.",
-            preReqs: "First time interacting with the AI Orb after login.",
+            "id": "mo-8",
+            "text": "Granted permissions persist across app force-close and relaunch",
+            "expected": "Grant all permissions, force-close the app, relaunch. The app does NOT re-prompt for permissions. Device Settings still shows them granted.",
+            "preReqs": "All permissions granted in onboarding.",
+            "whereToLook": "synrgy-app/app/_layout.tsx (Sahha config on launch); OS persistence",
+            "estimatedMinutes": 4
           },
           {
-            id: "mo-31",
-            text: "Orb greeting is personalized to the member's plan",
-            expected: "The orb greets you by name and references your specific plan or company. The greeting is not generic — it demonstrates knowledge of your membership.",
-            preReqs: "First orb interaction after login.",
+            "id": "mo-12",
+            "text": "Member can re-enable previously denied permissions in device settings",
+            "expected": "Go to device Settings → SYNRGY → toggle a previously denied permission on. Return to the app. The associated feature is now usable without an app restart.",
+            "preReqs": "A permission was denied during onboarding.",
+            "whereToLook": "OS behavior; synrgy-app/app/onboarding.tsx (no special re-entry handling)",
+            "estimatedMinutes": 3
           },
           {
-            id: "mo-32",
-            text: "Orb never implies SYNRGY determines benefit eligibility",
-            expected: "Listen to the orb's full greeting and any follow-up dialogue. At no point does the orb say SYNRGY 'determines', 'decides', or 'qualifies' users for benefits. Compliant language only.",
-            preReqs: "Interacting with the AI Orb.",
-          },
-        ],
+            "id": "mo-13",
+            "text": "Re-enabling a permission activates the associated feature without restart",
+            "expected": "Within the same app session, toggle a permission on in Settings and return to the app. Use the related feature (open Pharmacy Locator, start a face scan, etc.). The feature works without needing to restart the app.",
+            "preReqs": "Just re-enabled a previously denied permission in device settings.",
+            "whereToLook": "OS reactive permission model",
+            "estimatedMinutes": 3
+          }
+        ]
       },
-    ],
+      {
+        "title": "Income, household, and final welcome",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "mo-43",
+            "text": "Income & household step accepts entry and submits to CB",
+            "expected": "On step 11, enter an annual income amount (auto-formatted with commas) and select household size (picker overlay 1-9+). Tap Continue. Onboarding advances to the final welcome step. Backend records the values via updateHouseholdData.",
+            "preReqs": "Just completed the permissions flow.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:228-245, 341-413, 444-455",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "mo-44",
+            "text": "Income & household step is skippable",
+            "expected": "On step 11, tap Skip. Onboarding advances to the final welcome without submitting income or household data.",
+            "preReqs": "On the Income & Household step.",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:444-455",
+            "estimatedMinutes": 2
+          },
+          {
+            "id": "mo-45",
+            "text": "Final welcome auto-completes after ~2.5 seconds",
+            "expected": "The final welcome screen shows an animated checkmark, a personalized title with your first name, and a loading dots animation. It auto-completes after roughly 2.5 seconds, routing to the home screen. The user does not need to tap anything.",
+            "preReqs": "Just completed (or skipped) the income step.",
+            "whereToLook": "synrgy-app/components/onboarding/FinalWelcome.tsx:40-64",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-46",
+            "text": "Returning users skip the entire onboarding flow",
+            "expected": "After a user completes onboarding once and logs out, then logs back in on the same device, the app routes directly to the home screen. Onboarding video, slides, and permissions do not replay.",
+            "preReqs": "User has previously completed onboarding (AsyncStorage @synrgy:onboarding_complete is true).",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:112-118; synrgy-app/app/_layout.tsx",
+            "estimatedMinutes": 3
+          }
+        ]
+      },
+      {
+        "title": "HRA list and intro",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "mo-20",
+            "text": "Home screen surfaces an HRA action card if no assessments are completed",
+            "expected": "After completing onboarding, the home screen shows an action card prompting completion of the Health Risk Assessment. Tapping the card navigates to /hra.",
+            "preReqs": "First-time member with no completed assessments.",
+            "whereToLook": "synrgy-app/app/index.tsx:198-212",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-21",
+            "text": "HRA list shows intro stats, in-progress, and past assessments",
+            "expected": "On /hra, the screen shows an intro card with: total assessments count, completed count, and approximate duration (~10 minutes). Below: 'Resume' section listing in-progress assessments with their start date; 'Past Assessments' section listing finished assessments most-recent-first.",
+            "preReqs": "On the HRA list screen.",
+            "whereToLook": "synrgy-app/app/hra.tsx:110-167, 195-242",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "mo-26",
+            "text": "Member can dismiss the HRA action card and proceed to other features",
+            "expected": "On the home screen, the HRA action card has a dismiss button. Tapping it removes the card without breaking the home screen. Other features remain accessible.",
+            "preReqs": "On the home screen with HRA card visible.",
+            "whereToLook": "synrgy-app/app/index.tsx:406-412 (per-card dismiss)",
+            "estimatedMinutes": 2
+          },
+          {
+            "id": "mo-27",
+            "text": "HRA remains accessible from the service menu after dismissing the card",
+            "expected": "After dismissing the action card, open the service menu (grid or list overlay on home). The HRA service tile is still visible and tappable, routing to /hra.",
+            "preReqs": "HRA action card dismissed.",
+            "whereToLook": "synrgy-app/app/index.tsx:627-655; synrgy-app/constants/services.ts (health-risk-assessment service)",
+            "estimatedMinutes": 2
+          },
+          {
+            "id": "mo-28",
+            "text": "Member can complete HRA at any point post-onboarding",
+            "expected": "Open /hra, tap Start New HRA. The wizard launches and can be completed in one session. Results screen appears upon finish.",
+            "preReqs": "On the HRA list screen, no in-progress assessment.",
+            "whereToLook": "synrgy-app/app/hra.tsx:48-54; synrgy-app/app/hra-wizard.tsx",
+            "estimatedMinutes": 12
+          }
+        ]
+      },
+      {
+        "title": "HRA wizard — section progress and validation",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "mo-22",
+            "text": "HRA wizard presents questions section-by-section with a progress bar",
+            "expected": "Inside the wizard, questions are grouped into sections. A progress bar animates and shows the section name plus 'current / total' indicator. Tapping Next validates the current section and advances; Back returns one section (disabled on section 1).",
+            "preReqs": "Inside /hra-wizard.",
+            "whereToLook": "synrgy-app/app/hra-wizard.tsx:187-190, 392-398, 443, 458-460",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "mo-47",
+            "text": "Number question enforces min/max bounds and NaN check",
+            "expected": "A number question with defined bounds (e.g., systolic BP) shows a range hint. Entering a value outside the bounds or non-numeric input shows an inline error and blocks Next.",
+            "preReqs": "On a section containing a number question.",
+            "whereToLook": "synrgy-app/app/hra-wizard.tsx:228-243; synrgy-app/components/hra/NumberQuestion.tsx",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-48",
+            "text": "Date question enforces MM/DD/YYYY format and rejects future dates",
+            "expected": "A date question accepts MM/DD/YYYY. Invalid calendar dates (Feb 30), years <1900, or future dates are rejected with inline error.",
+            "preReqs": "On a section containing a date question.",
+            "whereToLook": "synrgy-app/app/hra-wizard.tsx:255-277; synrgy-app/components/hra/DateQuestion.tsx",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-49",
+            "text": "Multi-select question requires at least one option when required",
+            "expected": "A required multi-select question shows the hint 'Select all that apply'. Submitting with no selection blocks Next with an error.",
+            "preReqs": "On a section containing a required multi-select question.",
+            "whereToLook": "synrgy-app/app/hra-wizard.tsx:284-287; synrgy-app/components/hra/MultiSelectQuestion.tsx",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-50",
+            "text": "Don't-know option is always valid when offered",
+            "expected": "Questions with allowDontKnow=true show a 'Don't know' button below the input. Selecting it counts as a valid response regardless of other input, and Next advances.",
+            "preReqs": "On a question with the Don't know option visible.",
+            "whereToLook": "synrgy-app/components/hra/QuestionRenderer.tsx:95-103; synrgy-app/app/hra-wizard.tsx:213",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-51",
+            "text": "Age question auto-fills from member DOB when first encountered",
+            "expected": "The HRA section containing an age question (number type, text contains 'age') is pre-filled with the user's age calculated from member DOB on profile. The user can override.",
+            "preReqs": "First time encountering the age question for this assessment.",
+            "whereToLook": "synrgy-app/app/hra-wizard.tsx:135-156",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-52",
+            "text": "Suggestion autocomplete debounces input by ~300ms",
+            "expected": "On a text question with suggestionsCategory (e.g., medication name), typing triggers an autocomplete dropdown. Suggestions appear after a brief pause (about 300 milliseconds). Tapping a suggestion fills the field.",
+            "preReqs": "On a question with suggestionsCategory set.",
+            "whereToLook": "synrgy-app/components/hra/SuggestionInput.tsx:44-57",
+            "estimatedMinutes": 3
+          }
+        ]
+      },
+      {
+        "title": "HRA wizard — abandon and resume",
+        "platform": "SYNRGY app",
+        "path": "path-c",
+        "checks": [
+          {
+            "id": "mo-53",
+            "text": "Exit mid-wizard prompts with Continue / Exit, does not auto-submit",
+            "expected": "Tap the Exit button (X) mid-section. An alert appears with 'Continue Assessment' (cancel) and 'Exit' options. Tapping Exit returns to the HRA list without submitting the current section. The assessment status is unchanged on the server.",
+            "preReqs": "Inside hra-wizard mid-section.",
+            "whereToLook": "synrgy-app/app/hra-wizard.tsx:400-405",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-54",
+            "text": "Resume in-progress HRA returns to the correct section",
+            "expected": "From the HRA list Resume section, tap an in-progress assessment. The wizard loads the user's actual current section (not always section 1) and pre-fills any answers already submitted in earlier sections.",
+            "preReqs": "An in-progress HRA exists for this member.",
+            "whereToLook": "synrgy-app/app/hra-wizard.tsx:112-119, 128-132",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "mo-23",
+            "text": "After the final section submission, the user lands on results",
+            "expected": "After submitting the final HRA section, the wizard fades and routes to /hra-results with the assessmentId. No long stall: navigation should occur within a couple of seconds.",
+            "preReqs": "Just submitted the final HRA section.",
+            "whereToLook": "synrgy-app/app/hra-wizard.tsx:362-370",
+            "estimatedMinutes": 3
+          }
+        ]
+      },
+      {
+        "title": "HRA results",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "mo-24",
+            "text": "Results screen shows wellness score, color-coded by band",
+            "expected": "The results screen displays a wellness score in a circular badge. Color: green 80+, orange 60-79 or 40-59, red <40. Completion date is shown in long form.",
+            "preReqs": "Just completed an HRA.",
+            "whereToLook": "synrgy-app/app/hra-results.tsx:60-71, 201-222",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-55",
+            "text": "Results show derived metrics (BMI, hypertension category, pack years) when applicable",
+            "expected": "If the assessment captured the inputs, the results screen displays BMI value+category, hypertension category+description, and pack-years value+classification. If inputs were not captured, the section is absent.",
+            "preReqs": "Just completed an HRA with relevant inputs.",
+            "whereToLook": "synrgy-app/app/hra-results.tsx:228-266",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-56",
+            "text": "Risk flags appear with severity badge",
+            "expected": "If any risk flags were generated, they appear as cards with a severity badge (low green, moderate orange, high dark-orange, critical red) and a brief description.",
+            "preReqs": "Just completed an HRA that generated risk flags.",
+            "whereToLook": "synrgy-app/app/hra-results.tsx:34-44, 269-296",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-57",
+            "text": "Cardiovascular section shows 10-year CV risk, vascular age, diabetes risk",
+            "expected": "When CV inputs were captured, the results screen shows 10-year cardiovascular risk percentage, vascular age in years, and diabetes risk percentage in a grid.",
+            "preReqs": "Just completed an HRA with CV inputs.",
+            "whereToLook": "synrgy-app/app/hra-results.tsx:299-331",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-58",
+            "text": "Recommended labs and screenings are listed with reason and frequency",
+            "expected": "When the engine recommends labs or screenings, each appears with name, reason for recommendation, and (for screenings) a frequency.",
+            "preReqs": "Just completed an HRA where recommendations were generated.",
+            "whereToLook": "synrgy-app/app/hra-results.tsx:334-382",
+            "estimatedMinutes": 3
+          }
+        ]
+      },
+      {
+        "title": "Compliance copy across onboarding and HRA",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "mo-18",
+            "text": "All carousel and HRA copy uses compliant insured-event language",
+            "expected": "Read every screen of the onboarding carousel, the HRA intro, and the results page. Any reference to coverage events uses compliant phrasing like 'may correspond to insured events' or similar. Record exact phrasing in notes.",
+            "preReqs": "General observation across onboarding + HRA flows.",
+            "whereToLook": "synrgy-app/components/onboarding/IntroSlide.tsx; synrgy-app/app/hra-results.tsx",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "mo-19",
+            "text": "No occurrence of 'qualify for benefits', 'earn benefits', 'rewards', 'credits', 'points'",
+            "expected": "Read every onboarding and HRA screen. None of the prohibited phrases appear anywhere. Flag any occurrence verbatim in notes.",
+            "preReqs": "General observation.",
+            "whereToLook": "synrgy-app/components/onboarding/; synrgy-app/app/hra*.tsx; CLAUDE.md compliance note",
+            "estimatedMinutes": 5,
+            "failureGuidance": "Any occurrence of prohibited phrasing must be flagged in notes verbatim. This is a hard compliance failure for fixed indemnity product."
+          }
+        ]
+      },
+      {
+        "title": "AI Orb first interaction",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "mo-30",
+            "text": "First Orb interaction includes a transparency disclaimer",
+            "expected": "The first time you tap the Orb after completing onboarding, the Orb identifies itself as an AI assistant in natural language. The disclaimer is delivered conversationally, not robotically, per the Responsible AI Manifesto.",
+            "preReqs": "Just completed onboarding. First Orb tap of this session.",
+            "whereToLook": "synrgy-app/app/index.tsx; Uptyck system prompt configuration",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-31",
+            "text": "Orb greeting is personalized to the member",
+            "expected": "The Orb greets the user by first name and references the user's specific plan or company. The greeting demonstrates RAG-loaded knowledge of the user's membership.",
+            "preReqs": "First Orb interaction post-onboarding.",
+            "whereToLook": "synrgy-app/app/index.tsx; Uptyck RAG plan context",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mo-32",
+            "text": "Orb never implies SYNRGY determines eligibility for insured events",
+            "expected": "Listen to the Orb's greeting and any follow-up. At no point does it say SYNRGY 'determines', 'decides', or 'qualifies' the user for benefits. Compliant language only — actions 'may correspond to insured events'.",
+            "preReqs": "Engaged with the Orb.",
+            "whereToLook": "synrgy-app/app/index.tsx; Uptyck system prompt",
+            "estimatedMinutes": 3,
+            "failureGuidance": "Any non-compliant phrasing is a hard fail; record verbatim."
+          }
+        ]
+      }
+    ]
   },
 
   // ─── SCENARIO 8: Member uses core app features ───
   {
-    id: "member-features",
-    persona: "Member",
-    icon: "E",
-    color: "#993556",
-    bg: "#FBEAF0",
-    title: "Daily app engagement & features",
-    summary:
-      "Member uses all core app features. Engagement actions are tracked, covered events log correctly, and compliance language is verified on every surface.",
-    steps: [
+    "id": "member-features",
+    "persona": "Member",
+    "icon": "E",
+    "color": "#993556",
+    "bg": "#FBEAF0",
+    "title": "Daily app engagement & features",
+    "summary": "Member uses core daily-engagement features: Prevention Guidance feed, face vitals scan history, virtual urgent care, formulary search, and discount card. Compliance language is verified on every confirmation surface.",
+    "steps": [
       {
-        title: "Virtual care",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Prevention Guidance feed",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mf-1",
-            text: "Member can search and browse available providers",
-            expected: "Navigate to the Virtual Care section. A search field or browse interface shows available providers. You can search by specialty, name, or condition. Results display provider name, specialty, and availability.",
-            preReqs: "Logged into the app. Navigate to Virtual Care.",
+            "id": "mf-29",
+            "text": "Latest guidance card renders with title, summary, tags, personalization pill",
+            "expected": "Open /guidance from the service menu or an action card. The Latest Guidance card shows a domain icon and badges, title, 3-line summary, and tags indicating content type (video / article / actions). A personalization-level pill is visible ('Highly Personalized' / 'Personalized' / 'General').",
+            "preReqs": "Member has at least one guidance generated. Sahha data may take hours to populate after install.",
+            "whereToLook": "synrgy-app/app/guidance.tsx:83-94, 213-278",
+            "estimatedMinutes": 4,
+            "notes": "Sahha-driven guidance takes hours to populate from background health sync."
           },
           {
-            id: "mf-2",
-            text: "Booking a telemedicine appointment completes successfully",
-            expected: "Select a provider and available time slot. Complete the booking flow (confirm identity, describe concern, select time). A confirmation screen shows the appointment details. The appointment appears in your upcoming visits.",
-            preReqs: "In the Virtual Care section with providers available.",
+            "id": "mf-30",
+            "text": "Today's Actions section shows up to 3 actions when present",
+            "expected": "Below the Latest Guidance card, a 'Today's Actions' section shows up to 3 actionable items. If fewer exist, fewer are shown. If none, the section is absent.",
+            "preReqs": "Latest guidance includes actions.",
+            "whereToLook": "synrgy-app/app/guidance.tsx:281-301",
+            "estimatedMinutes": 2
           },
           {
-            id: "mf-3",
-            text: "Video session connects and functions",
-            expected: "At the scheduled time, join the video session. Video and audio connect within 30 seconds. Both participant video feeds are visible. Audio is clear. The session can last the full allocated time.",
-            preReqs: "A booked telemedicine appointment is starting.",
+            "id": "mf-31",
+            "text": "Past guidance list paginates via infinite scroll",
+            "expected": "Below the latest card, a Past Guidance list shows prior guidance items (most recent first), excluding the latest one. Scrolling near the bottom loads more items via paginated fetch.",
+            "preReqs": "Member has multiple past guidance items.",
+            "whereToLook": "synrgy-app/app/guidance.tsx:152-176, 328-365",
+            "estimatedMinutes": 4
           },
           {
-            id: "mf-4",
-            text: "Completed visit appears in member's visit history",
-            expected: "After the visit ends, navigate to visit history. The completed visit appears with: provider name, date, visit type, and status 'Completed'. The entry persists across app restarts.",
-            preReqs: "A video visit was just completed.",
+            "id": "mf-32",
+            "text": "Empty state shown if no guidance exists yet",
+            "expected": "If the user has no generated guidance (new account, Sahha not yet populated), an empty state appears with a Refresh button. Tapping Refresh re-queries the latest guidance endpoint.",
+            "preReqs": "New account with no guidance.",
+            "whereToLook": "synrgy-app/app/guidance.tsx:188-208",
+            "estimatedMinutes": 3
           },
           {
-            id: "mf-5",
-            text: "Visit is recorded as a covered event with correct event type",
-            expected: "In the admin portal, check the member's covered events log. A 'Virtual Care Visit' event appears with the correct date and event type classification.",
-            preReqs: "Visit completed. Admin portal access for verification.",
-          },
-        ],
+            "id": "mf-14",
+            "text": "Recommendations are personalized to the member's data",
+            "expected": "Read the latest guidance content. At least some of the recommendations reference the user's actual metrics or behaviors (e.g., named medications, observed activity levels, recent sleep patterns). Not all generic.",
+            "preReqs": "Member has enough Sahha data for personalization.",
+            "whereToLook": "synrgy-app/app/guidance.tsx; synrgy-app/services/cleverhealth-api.ts (CHGuidance)",
+            "estimatedMinutes": 4
+          }
+        ]
       },
       {
-        title: "Monthly health screening",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Prevention Guidance detail",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mf-6",
-            text: "Screening prompt appears at correct monthly interval",
-            expected: "After the configured monthly interval since the last screening (or since enrollment if first time), a screening prompt appears in the app (card, banner, or notification). It appears at the right time — not too early, not too late.",
-            preReqs: "Enrolled for at least one month or screening interval has elapsed.",
+            "id": "mf-33",
+            "text": "Detail screen plays HLS video with auth token query param",
+            "expected": "Open a guidance detail with video content. A play overlay is visible. Tapping it streams the .m3u8 video from CleverHealth. The token is appended as a query param. Native video controls are present once playing.",
+            "preReqs": "On a guidance with video content available (video.introStatus === 'completed' or segments exist).",
+            "whereToLook": "synrgy-app/app/guidance-detail.tsx:264-273, 341-396",
+            "estimatedMinutes": 4
           },
           {
-            id: "mf-7",
-            text: "Member can complete the screening flow",
-            expected: "Tap the screening prompt. Complete all screening questions/steps. The flow ends with a completion confirmation. No errors, no stuck screens.",
-            preReqs: "Screening prompt is visible.",
+            "id": "mf-34",
+            "text": "Article scrolling near the bottom fires article_read engagement once",
+            "expected": "Read an article guidance. Scroll within ~100px of the bottom. The engagement event 'article_read' is recorded once (server-side; client fires it fire-and-forget). Subsequent scroll-to-bottom does not double-fire.",
+            "preReqs": "On a guidance detail with article content.",
+            "whereToLook": "synrgy-app/app/guidance-detail.tsx:178-183, 234-239",
+            "estimatedMinutes": 3
           },
           {
-            id: "mf-8",
-            text: "Completion is recorded as a covered event with timestamp",
-            expected: "In the admin portal, a 'Health Screening' covered event appears with a timestamp matching when you completed the screening.",
-            preReqs: "Screening completed. Admin portal access.",
+            "id": "mf-35",
+            "text": "Video finish fires video_watched engagement once",
+            "expected": "Play a video guidance to completion. The 'video_watched' engagement event is fired once. Replaying does not double-fire.",
+            "preReqs": "On a guidance detail with video.",
+            "whereToLook": "synrgy-app/app/guidance-detail.tsx:188, 388",
+            "estimatedMinutes": 4
           },
           {
-            id: "mf-9",
-            text: "Confirmation message uses compliant language",
-            expected: "The screening completion confirmation message uses compliant language. It says the screening 'may correspond to a covered event' or similar — NOT 'you earned a benefit' or 'you qualified'.",
-            preReqs: "Just completed the screening, viewing the confirmation.",
+            "id": "mf-36",
+            "text": "Action items can be locally checked off",
+            "expected": "On the detail screen, action items have a checkbox. Tapping toggles a strikethrough on the text. Note: the checked state may not persist across screens — this is local-only UI per Phase 1 inventory.",
+            "preReqs": "On a guidance detail with action items.",
+            "whereToLook": "synrgy-app/app/guidance-detail.tsx:295-310, 410-427",
+            "estimatedMinutes": 3,
+            "notes": "Local checkbox state may not persist across screen visits."
           },
-        ],
+          {
+            "id": "mf-37",
+            "text": "Guidance detail surfaces a non-medical-advice disclaimer",
+            "expected": "A non-medical-advice disclaimer is visible (footer or info card) on the detail screen.",
+            "preReqs": "On a guidance detail.",
+            "whereToLook": "synrgy-app/app/guidance-detail.tsx:313-325",
+            "estimatedMinutes": 2
+          }
+        ]
       },
       {
-        title: "Body vitals",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Virtual Urgent Care (entry from menu)",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mf-10",
-            text: "Health data syncs from connected device (steps, heart rate, sleep)",
-            expected: "With a connected health device (Apple Watch, HealthKit, etc.), navigate to Vitals. Data for steps, heart rate, and sleep appears. Values match what the source device recorded.",
-            preReqs: "Health data permission granted. A health device is connected with recent data.",
+            "id": "mf-3",
+            "text": "VUC video session connects and functions",
+            "expected": "After completing the intake, the Twilio Video session connects within 30 seconds. Local and remote video feeds render. Audio is clear. The session sustains for the allocated time without disconnects.",
+            "preReqs": "Logged in, started a VUC visit, clinician present.",
+            "whereToLook": "synrgy-app/components/tm/TwilioVideoView.tsx; synrgy-app/app/virtual-urgent-care.tsx",
+            "estimatedMinutes": 10
           },
           {
-            id: "mf-11",
-            text: "Synced data appears on dashboard within 5 minutes",
-            expected: "After generating new health data (e.g., take a short walk for steps), check the Vitals dashboard within 5 minutes. The new data appears — steps count has increased, heart rate has a recent reading.",
-            preReqs: "Health data sync is active. Generate fresh data on the source device.",
-          },
-          {
-            id: "mf-12",
-            text: "Values on dashboard match source device readings",
-            expected: "Compare the vitals values in the SYNRGY app against the source device (Apple Health, Fitbit, etc.). Steps count, heart rate, and sleep duration should match within a reasonable tolerance.",
-            preReqs: "Health data is synced to both the source app and SYNRGY.",
-          },
-        ],
+            "id": "mf-4",
+            "text": "Completed VUC visit appears in /visits history",
+            "expected": "After a visit ends, navigate to /visits. The completed visit appears with member name, date in MM/DD/YYYY, reason for visit (up to 2 lines), and a Completed status pill in green. The entry persists across app restarts.",
+            "preReqs": "Just completed a VUC visit.",
+            "whereToLook": "synrgy-app/app/visits.tsx:65-94, 170-206",
+            "estimatedMinutes": 4
+          }
+        ]
       },
       {
-        title: "Behavioral health insights",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Face vitals scan — latest reading",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mf-13",
-            text: "Insights display as 'Health insights' only (SDK never named to user)",
-            expected: "Navigate to the health insights section. The section is labeled 'Health Insights' or similar generic name. No third-party SDK name (e.g., no mention of the underlying technology provider) appears anywhere in the UI.",
-            preReqs: "Logged in with health data available.",
+            "id": "mf-10",
+            "text": "Face vitals scan completes and persists results to scan history",
+            "expected": "Tap Start Scan on /vitals-scan. The ShenAI camera-based scan runs for ~30 seconds. On completion, the app navigates to /scan-detail with the new scan ID. The scan appears in the recent-scans list on the next visit to /vitals-scan.",
+            "preReqs": "Camera permission granted. Good lighting. Face visible to camera.",
+            "whereToLook": "synrgy-app/app/vitals-scan.tsx:42-46, 98-107; synrgy-app/app/vitals-scanner.native.tsx:83-189",
+            "estimatedMinutes": 6
           },
           {
-            id: "mf-14",
-            text: "Recommendations are personalized based on member's data",
-            expected: "The insights/recommendations shown are specific to the member's data (activity levels, sleep patterns, etc.). They are not all generic tips — at least some reference the member's actual metrics.",
-            preReqs: "Member has sufficient health data for personalization.",
+            "id": "mf-11",
+            "text": "Latest scan data is available via useLatestVitals hook (refreshes every 5 min)",
+            "expected": "After a scan, any home-screen or other UI element that consumes the latest-vitals hook reflects the new reading. The hook auto-refreshes every 5 minutes.",
+            "preReqs": "A scan has been recorded.",
+            "whereToLook": "synrgy-app/hooks/useLatestVitals.ts",
+            "estimatedMinutes": 4
           },
           {
-            id: "mf-15",
-            text: "No third-party SDK branding appears anywhere in the UI",
-            expected: "Scan every screen in the health insights section. No logos, names, or branding from third-party SDKs appear. The experience is fully white-labeled under SYNRGY branding.",
-            preReqs: "In the health insights section.",
-          },
-        ],
+            "id": "mf-12",
+            "text": "Sahha-driven background data feeds CleverHealth for guidance generation",
+            "expected": "After Sahha has been authenticated and connected health data exists, Sahha-fed data eventually drives guidance recommendations on /guidance. The 'source of truth' for background sync is the device's health platform (Apple Health / Health Connect).",
+            "preReqs": "Sahha authenticated, connected health data exists on the source platform.",
+            "whereToLook": "synrgy-app/services/sahha.ts; synrgy-app/CLAUDE.md (Sahha section)",
+            "estimatedMinutes": 4,
+            "notes": "Sahha takes hours to populate. Do not expect immediate appearance in guidance."
+          }
+        ]
       },
       {
-        title: "Rx savings",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Formulary and discount card",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mf-16",
-            text: "Medication search returns results with pharmacy options and pricing",
-            expected: "Navigate to Rx Savings. Search for a common medication (e.g., 'Lisinopril'). Results show a list of pharmacies with prices for that medication. At least 3 pharmacy options appear.",
-            preReqs: "In the app. Navigate to Rx Savings section.",
+            "id": "mf-16",
+            "text": "Formulary search returns drug results from the embedded dataset",
+            "expected": "Open /formulary. Search for a common drug name (e.g., 'Lisinopril'). Results show matching drugs with name, category, dosage count, and forms. Results are derived from the embedded constants/formulary.ts dataset, not a live pharmacy-pricing API.",
+            "preReqs": "On the Formulary screen.",
+            "whereToLook": "synrgy-app/app/formulary.tsx:53-118; synrgy-app/constants/formulary.ts",
+            "estimatedMinutes": 4
           },
           {
-            id: "mf-17",
-            text: "At least 3 pharmacy options shown with savings calculated",
-            expected: "For the searched medication, at least 3 pharmacy options are listed with their price. Each option shows the savings amount compared to retail price or a baseline.",
-            preReqs: "A medication search has been performed.",
+            "id": "mf-17",
+            "text": "Drug detail shows dosages, forms, and a covered badge",
+            "expected": "Tap a drug from the formulary list. The detail screen shows the drug name, category, list of dosages as chips (e.g., 500 mg, 1000 mg), and forms (e.g., Tablet). A 'This drug is covered' badge appears in green.",
+            "preReqs": "On the formulary search results.",
+            "whereToLook": "synrgy-app/app/drug-detail.tsx:57-89",
+            "estimatedMinutes": 3
           },
           {
-            id: "mf-18",
-            text: "Pet medication search works through same engine",
-            expected: "Search for a common pet medication (e.g., 'Apoquel' or 'Heartgard'). The same search interface returns results with pharmacy options and pricing, similar to human medications.",
-            preReqs: "In the Rx Savings section.",
+            "id": "mf-38",
+            "text": "Drug detail has Rx Savings Card and Find Pharmacy buttons",
+            "expected": "On the drug detail screen, two action buttons are visible: 'Rx Savings Card' routes to /discount-card; 'Find Pharmacy' routes to /pharmacy-locator.",
+            "preReqs": "On a drug detail screen.",
+            "whereToLook": "synrgy-app/app/drug-detail.tsx:91-104",
+            "estimatedMinutes": 2
           },
-        ],
+          {
+            "id": "mf-39",
+            "text": "Discount card renders BIN, PCN, Group, and Member ID",
+            "expected": "On /discount-card, a credit-card-style display shows BIN, PCN, Group, and Member ID values fetched via getInsuranceCard. All fields are populated; none show placeholder text.",
+            "preReqs": "Member has insurance card data on file.",
+            "whereToLook": "synrgy-app/app/discount-card.tsx:16-85",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "mf-40",
+            "text": "Discount card error state shows retry button",
+            "expected": "If the insurance card API call fails, an error message appears with a Retry button. Tapping Retry re-fetches.",
+            "preReqs": "Force a fetch error (offline or test member without card on file).",
+            "whereToLook": "synrgy-app/app/discount-card.tsx:44-53",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Food logging",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Branding and compliance across daily features",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "mf-19",
-            text: "Member can log food items and they persist",
-            expected: "Navigate to Food Logging. Add a food item (search or manual entry). The item appears in the log with date and details. Close and reopen the app — the logged item persists.",
-            preReqs: "In the app. Navigate to Food Logging section.",
+            "id": "mf-13",
+            "text": "Health insights are labeled as 'Health Insights' or similar; no SDK names visible",
+            "expected": "Scan any in-app surface that presents health insights (guidance, vitals classification). No reference to underlying SDKs (Sahha, Uptyck, ShenAI) is visible in user-facing copy.",
+            "preReqs": "General observation.",
+            "whereToLook": "Manual scan across guidance.tsx, scan-detail.tsx, index.tsx",
+            "estimatedMinutes": 4
           },
           {
-            id: "mf-20",
-            text: "Flagged items trigger toxicity alert with correct severity",
-            expected: "Log a food item known to trigger a toxicity alert (if test data is available). An alert appears with severity level (Low/Medium/High). The alert content is relevant to the flagged item.",
-            preReqs: "In Food Logging. Know which items trigger alerts in test environment.",
+            "id": "mf-15",
+            "text": "No third-party SDK branding appears in any screen",
+            "expected": "Walk through every screen accessible to a member. No logos, names, or branding from Sahha, Uptyck, ShenAI, Twilio, or other vendors. SYNRGY branding only.",
+            "preReqs": "General observation across the app.",
+            "whereToLook": "Manual scan",
+            "estimatedMinutes": 5
           },
           {
-            id: "mf-21",
-            text: "Logging activity tracked as engagement action",
-            expected: "After logging food, check the admin portal for the member's engagement data. A food logging engagement action appears with the correct timestamp.",
-            preReqs: "Food item just logged. Admin portal access.",
-          },
-        ],
-      },
-      {
-        title: "Pet care features",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
-          {
-            id: "mf-22",
-            text: "Virtual vet consultation can be booked and completed",
-            expected: "Navigate to Pet Care. Book a virtual vet consultation: select pet type, describe concern, choose available slot. Complete the consultation. Confirmation shows the visit details.",
-            preReqs: "In the app. Navigate to Pet Care section.",
+            "id": "mf-27",
+            "text": "App never says SYNRGY 'determines', 'decides', or 'controls' insured events",
+            "expected": "Review every confirmation message, action card caption, and detail screen copy. The app never claims SYNRGY determines insured-event eligibility. Compliant language only.",
+            "preReqs": "General observation.",
+            "whereToLook": "Manual scan",
+            "estimatedMinutes": 5,
+            "failureGuidance": "Any occurrence of 'determines / decides / controls eligibility' is a hard compliance fail."
           },
           {
-            id: "mf-23",
-            text: "Pet visit appears in history",
-            expected: "After the virtual vet consultation, check visit history (pet-specific or combined). The pet visit appears with: date, vet name, pet type, and visit status.",
-            preReqs: "A pet virtual vet consultation was just completed.",
-          },
-          {
-            id: "mf-24",
-            text: "Owner behavioral correlation insights surface when relevant",
-            expected: "If the system generates insights correlating owner behavior with pet health (e.g., activity levels), these appear in the insights section when sufficient data exists. If no correlation data is available yet, note this.",
-            preReqs: "Both owner and pet health data exist in the system.",
-          },
-        ],
-      },
-      {
-        title: "Engagement tracking verification",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
-          {
-            id: "mf-25",
-            text: "Every qualifying engagement action creates a covered event record",
-            expected: "After performing multiple qualifying actions (virtual care visit, screening, HRA, etc.), check the admin portal. Each action has a corresponding covered event record. No actions are missing from the log.",
-            preReqs: "Multiple qualifying actions have been performed. Admin portal access.",
-          },
-          {
-            id: "mf-26",
-            text: "Covered events include correct event type and timestamp",
-            expected: "Open each covered event record. The event type matches the action performed (e.g., 'Virtual Care Visit', 'Health Screening'). Timestamps are accurate to within a few minutes of when the action occurred.",
-            preReqs: "Covered events exist in the admin portal.",
-          },
-          {
-            id: "mf-27",
-            text: "App never describes itself as determining benefit eligibility",
-            expected: "Review all confirmation messages, event descriptions, and UI copy encountered during testing. The app never says it 'determines', 'decides', or 'controls' benefit eligibility. Only compliant language is used.",
-            preReqs: "General observation across all interactions.",
-          },
-          {
-            id: "mf-28",
-            text: "All confirmation messages use compliant language throughout",
-            expected: "Every confirmation message (post-visit, post-screening, post-HRA, etc.) uses compliant language. Actions 'may correspond to covered events' — never 'earn benefits' or 'qualify for benefits'.",
-            preReqs: "General observation across all interactions.",
-          },
-        ],
-      },
-    ],
+            "id": "mf-28",
+            "text": "All confirmation copy uses 'may correspond to insured events' or equivalent",
+            "expected": "Every confirmation message (post-scan, post-guidance, post-claim) uses compliant language: events 'may correspond to insured events'. Never 'earn benefits', 'qualify for benefits', 'rewards', 'credits', or 'points'.",
+            "preReqs": "General observation.",
+            "whereToLook": "Manual scan",
+            "estimatedMinutes": 5,
+            "failureGuidance": "Record verbatim any non-compliant phrasing."
+          }
+        ]
+      }
+    ]
   },
 
   // ─── NEW SCENARIO: AI Orb interaction testing ───
   {
-    id: "ai-orb-testing",
-    persona: "Member",
-    icon: "AI",
-    color: "#005F78",
-    bg: "#E1F5EE",
-    title: "AI Orb interaction testing",
-    summary:
-      "Tests the AI Orb's visual states, audio quality, conversation flow, service routing, knowledge accuracy, and free-form conversation. The Orb should speak naturally, route to correct services, and handle conversation endings gracefully.",
-    steps: [
+    "id": "ai-orb-testing",
+    "persona": "Member",
+    "icon": "AI",
+    "color": "#005F78",
+    "bg": "#E1F5EE",
+    "title": "AI Orb interaction testing",
+    "summary": "Tests the AI Orb's visual states, audio quality, conversation flow, service routing, knowledge accuracy, boundary behavior, and free-form conversation. The Orb should speak naturally, route to correct services, and handle conversation endings gracefully.",
+    "steps": [
       {
-        title: "Orb visual states",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Orb visual states",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "ai-1",
-            text: "Verify Orb color states match expected behavior",
-            expected: "Orb is RED when it has a health resource to share (pulsing animation). Orb turns BLUE when speaking. Orb turns GREEN when listening. Orb turns GRAY when inactive/disconnected. Teal radial gradient sphere appearance maintained in all states.",
-            preReqs: "Logged in, on home screen.",
+            "id": "ai-1",
+            "text": "Orb state-to-color mapping is correct (verify from code)",
+            "expected": "The Orb morphs through five states defined in code: idle, listening, thinking, speaking, notification. Each state has a target color that lerps over time. Record the observed color for each state and verify it matches the constants in components/Orb.tsx. Note: the legacy red/blue/green/gray mapping from the prior CleverTest scenario may not match — verify against current code.",
+            "preReqs": "Logged in, on home screen, interacting with the Orb to cycle through states.",
+            "whereToLook": "synrgy-app/components/Orb.tsx:97-127 (color lerp); state definitions",
+            "estimatedMinutes": 5,
+            "failureGuidance": "If observed colors differ from code-defined targets, record per-state in notes."
           },
           {
-            id: "ai-2",
-            text: "Tap Orb while red (first login, health resource queued)",
-            expected: "Orb turns blue. Orb greets you BY NAME. Orb states it is providing a health resource for you. Orb generates a card on your dashboard. Orb turns green once done speaking.",
-            preReqs: "Freshly logged in, have not yet received a health resource.",
+            "id": "ai-2",
+            "text": "Tap Orb while in notification state to consume the proactive insight",
+            "expected": "When the Orb is in the notification state (driven by hasProactiveInsight in AppContext), tapping it transitions through speaking → green/listening. The Orb greets the user by name, delivers the proactive insight, and generates an action card on the home dashboard.",
+            "preReqs": "A proactive insight is queued. Tester needs a reproducible trigger — check with Steph if this requires backend seeding.",
+            "whereToLook": "synrgy-app/app/index.tsx (hasProactiveInsight handling); synrgy-app/context/AppContext.tsx",
+            "estimatedMinutes": 4,
+            "notes": "Producer of hasProactiveInsight flag is not yet visible in mobile code; reproducible trigger TBD."
           },
           {
-            id: "ai-3",
-            text: "Tap Orb while gray (reconnect after conversation ended)",
-            expected: "Orb turns blue, greets the user. Then turns green to indicate it is now listening.",
-            preReqs: "Previous conversation has ended (orb is gray).",
+            "id": "ai-3",
+            "text": "Tap Orb after a conversation ended (idle/gray state) to reconnect",
+            "expected": "After ending a conversation (Orb idle), tapping the Orb resumes the voice session. The Orb greets, then transitions to listening.",
+            "preReqs": "Previous conversation ended (Orb idle).",
+            "whereToLook": "synrgy-app/app/index.tsx:188-252 (useSynrgyVoice)",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-4",
-            text: "First interaction includes transparency disclaimer",
-            expected: "Orb identifies itself as AI at the start of the conversation per the Responsible AI Manifesto. Disclaimer language is natural, not robotic.",
-            preReqs: "First time interacting with orb in this session.",
-          },
-        ],
+            "id": "ai-4",
+            "text": "First Orb interaction of the session includes a transparency disclaimer",
+            "expected": "The first Orb interaction in a session includes a verbal disclosure that it is an AI assistant, in natural language. Per the Responsible AI Manifesto.",
+            "preReqs": "First Orb interaction since login.",
+            "whereToLook": "Uptyck system prompt; synrgy-app/app/index.tsx",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Audio quality",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Audio quality",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "ai-5",
-            text: "Audio quality without headphones",
-            expected: "Audio is clear and audible. No fuzziness, distortion, or cutting out. Volume is appropriate for a conversation.",
-            preReqs: "Engage the orb in conversation, device speakers at normal volume.",
+            "id": "ai-5",
+            "text": "Audio is clear without headphones",
+            "expected": "Engage the Orb in conversation with device speakers at normal volume. Audio is clear and audible, no distortion or cutting out.",
+            "preReqs": "Microphone permission granted. In a quiet environment.",
+            "whereToLook": "OS + Uptyck SDK",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-6",
-            text: "Audio quality with headphones",
-            expected: "Audio is clear, audible, and routes to headphones (not device speakers). No delay or sync issues between orb animation and audio.",
-            preReqs: "Connect headphones (wired or Bluetooth), engage the orb.",
-          },
-        ],
+            "id": "ai-6",
+            "text": "Audio routes correctly to headphones",
+            "expected": "Connect wired or Bluetooth headphones, engage the Orb. Audio routes to headphones (not device speakers). No sync delay between Orb animation and audio.",
+            "preReqs": "Headphones connected.",
+            "whereToLook": "OS routing + Uptyck SDK",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Ending conversations",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Ending conversations",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "ai-7",
-            text: "Say 'That's all I need, goodbye.'",
-            expected: "Orb acknowledges the end of conversation and verbally disengages. Orb turns gray. Orb no longer responds verbally when you speak to it (until re-tapped).",
-            preReqs: "Orb is green (listening).",
+            "id": "ai-7",
+            "text": "Say 'That's all I need, goodbye.' — Orb disengages gracefully",
+            "expected": "While Orb is listening, say the phrase. The Orb acknowledges and verbally disengages, then transitions to idle. Speaking again does not re-trigger a response until you tap the Orb.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "Uptyck voice agent (server-side intent)",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-8",
-            text: "Use a different farewell phrase of your choice",
-            expected: "Same as above — orb detects the conversation is ending, says goodbye, turns gray. NOTE: Record which farewell phrase you used in the notes field.",
-            preReqs: "Orb is green (listening).",
-          },
-        ],
+            "id": "ai-8",
+            "text": "Use a custom farewell phrase — Orb still detects the end",
+            "expected": "Same as ai-7 but using a different goodbye phrase of your choice. Record the phrase you used in notes.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "Uptyck voice agent",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Service routing",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Service routing — Orb generates the correct service card",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "ai-9",
-            text: "Say 'Can you connect me to tax resources?'",
-            expected: "Orb responds verbally about tax resources AND generates a Tax Hotline card on the dashboard.",
-            preReqs: "Orb is green (listening).",
+            "id": "ai-9",
+            "text": "'Can you connect me to tax resources?' → Tax Hotline card",
+            "expected": "The Orb responds verbally about tax resources AND adds a Tax Hotline action card to the home dashboard.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/constants/services.ts (tax-hotline); synrgy-app/app/tax-hotline.tsx",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-10",
-            text: "Say 'Can you help me update my password?'",
-            expected: "Orb responds AND generates a Profile card.",
-            preReqs: "Orb is green.",
+            "id": "ai-10",
+            "text": "'Can you help me update my password?' → Profile card",
+            "expected": "Orb responds AND generates a Profile action card linking to /edit-profile.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/edit-profile.tsx",
+            "estimatedMinutes": 2
           },
           {
-            id: "ai-11",
-            text: "Say 'Can you show me doctors in my area?'",
-            expected: "Orb responds AND generates a Provider Locator card.",
-            preReqs: "Orb is green.",
+            "id": "ai-11",
+            "text": "'Can you show me doctors in my area?' → Provider Locator card",
+            "expected": "Orb responds AND generates a Provider Locator action card linking to /provider-locator.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/provider-locator.tsx",
+            "estimatedMinutes": 2
           },
           {
-            id: "ai-12",
-            text: "Say 'Can you show me pharmacies in my area?'",
-            expected: "Orb responds AND generates a Pharmacy Locator card.",
-            preReqs: "Orb is green.",
+            "id": "ai-12",
+            "text": "'Can you show me pharmacies in my area?' → Pharmacy Locator card",
+            "expected": "Orb responds AND generates a Pharmacy Locator action card linking to /pharmacy-locator.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/pharmacy-locator.tsx",
+            "estimatedMinutes": 2
           },
           {
-            id: "ai-13",
-            text: "Say 'Can you help me check my blood pressure?'",
-            expected: "Orb responds AND generates a Vitals card.",
-            preReqs: "Orb is green.",
+            "id": "ai-13",
+            "text": "'Can you help me check my blood pressure?' → Vitals card",
+            "expected": "Orb responds AND generates a Vitals action card linking to /vitals-scan.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/vitals-scan.tsx",
+            "estimatedMinutes": 2
           },
           {
-            id: "ai-14",
-            text: "Say 'Can you help me schedule a therapy appointment?'",
-            expected: "Orb responds AND generates a Mental Health Support card.",
-            preReqs: "Orb is green.",
+            "id": "ai-14",
+            "text": "'Can you help me schedule a therapy appointment?' → Mental Health Support card",
+            "expected": "Orb responds AND generates a Mental Health Support card linking to /virtual-mental-health (Evo).",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/virtual-mental-health.tsx",
+            "estimatedMinutes": 2
           },
           {
-            id: "ai-15",
-            text: "Say 'Can I talk to a doctor right now?'",
-            expected: "Orb responds AND generates a Virtual Urgent Care card. Orb should mention $0 copay through the plan.",
-            preReqs: "Orb is green.",
+            "id": "ai-15",
+            "text": "'Can I talk to a doctor right now?' → Virtual Urgent Care card with $0 copay mention",
+            "expected": "Orb responds AND generates a Virtual Urgent Care action card. The verbal response should mention $0 copay through the plan.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/virtual-urgent-care.tsx; Uptyck plan RAG",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-16",
-            text: "Say 'Can you tell me more about the Synrgy plan?'",
-            expected: "Orb responds with accurate plan details.",
-            preReqs: "Orb is green.",
+            "id": "ai-16",
+            "text": "'Can you tell me more about the SYNRGY plan?'",
+            "expected": "Orb responds with accurate plan details, drawn from Uptyck RAG context loaded with the user's plan.",
+            "preReqs": "Orb listening. Plan information loaded into Uptyck.",
+            "whereToLook": "Uptyck RAG configuration; synrgy-app/services/uptyck.ts",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-17",
-            text: "Say 'Can you help me complete my health risk assessment?'",
-            expected: "Orb responds AND generates an HRA card.",
-            preReqs: "Orb is green.",
+            "id": "ai-17",
+            "text": "'Can you help me complete my health risk assessment?' → HRA card",
+            "expected": "Orb responds AND generates an HRA action card linking to /hra.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/hra.tsx",
+            "estimatedMinutes": 2
           },
           {
-            id: "ai-18",
-            text: "Say 'Can you help me schedule a routine check-up with my doctor?'",
-            expected: "Orb responds AND generates a Virtual Primary Care card. Should mention $0 copay.",
-            preReqs: "Orb is green.",
-          },
-        ],
+            "id": "ai-18",
+            "text": "'Can you help me schedule a routine check-up with my doctor?' → Virtual Primary Care card with $0 copay mention",
+            "expected": "Orb responds AND generates a VPC action card. The response should mention $0 copay.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/virtual-primary-care.tsx",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Service knowledge accuracy",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Service knowledge accuracy",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "ai-19",
-            text: "'What services do you provide in general?'",
-            expected: "Orb lists available services accurately. Information matches current plan docs. Orb speaks naturally (not reading a list robotically).",
-            preReqs: "Orb is green (listening).",
+            "id": "ai-19",
+            "text": "'What services do you provide in general?'",
+            "expected": "Orb lists available services accurately, matching the user's plan and CB service config. Speech is natural, not a robotic list-readout.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "Uptyck system prompt; CB getUserServiceConfig",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-20",
-            text: "'Tell me more about body vitals.'",
-            expected: "Orb explains the feature accurately: smartphone-based monitoring, what it measures, that readings are wellness estimates only — not medical diagnoses.",
-            preReqs: "Orb is green.",
+            "id": "ai-20",
+            "text": "'Tell me more about body vitals.'",
+            "expected": "Orb explains body vitals accurately: smartphone-based face scan via ShenAI, measures heart rate / BP / HRV / stress / breathing / cardiac workload / BMI. Mentions that readings are wellness estimates, NOT medical diagnoses.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "Uptyck system prompt; synrgy-app/app/vitals-scan.tsx",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-21",
-            text: "'Tell me more about virtual urgent care.'",
-            expected: "Orb explains VUC accurately, mentions $0 copay, describes how to access. Information is current.",
-            preReqs: "Orb is green.",
+            "id": "ai-21",
+            "text": "'Tell me more about virtual urgent care.'",
+            "expected": "Orb explains VUC: on-demand video visit, $0 copay, how to access (start from menu or VUC card).",
+            "preReqs": "Orb listening.",
+            "whereToLook": "Uptyck system prompt; synrgy-app/app/virtual-urgent-care.tsx",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-22",
-            text: "'Tell me more about mental health services.'",
-            expected: "Orb explains mental health options (chat, peer support, therapy scheduling). Should mention 988 Crisis Lifeline number.",
-            preReqs: "Orb is green.",
+            "id": "ai-22",
+            "text": "'Tell me more about mental health services.' — includes 988 crisis line",
+            "expected": "Orb explains options: Evo therapy, Bella chat, peer support. Mentions the 988 Crisis Lifeline number for emergencies.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/mental-health.tsx:87-101 (988); Uptyck system prompt",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-23",
-            text: "'Tell me more about virtual primary care.'",
-            expected: "Orb explains VPC: dedicated provider, ongoing care, $0 copay, how to schedule.",
-            preReqs: "Orb is green.",
+            "id": "ai-23",
+            "text": "'Tell me more about virtual primary care.'",
+            "expected": "Orb explains VPC: scheduled visit by phone (tel:8667101972), $0 copay, dedicated provider for ongoing care.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "synrgy-app/app/virtual-primary-care.tsx",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-24",
-            text: "Ask about other services (pharmacy locator, tax hotline, provider locator, HRA)",
-            expected: "Orb provides accurate, natural information for each. Flag any outdated or incorrect information in notes.",
-            preReqs: "Orb is green.",
-          },
-        ],
+            "id": "ai-24",
+            "text": "Other services accuracy (pharmacy locator, tax hotline, provider locator, HRA, health plans, insurance scan, at-home testing)",
+            "expected": "Probe each service. Orb provides accurate, current information for each. Flag any outdated or incorrect info in notes (e.g., references to features that no longer exist, or omits new features like at-home testing or insurance scan).",
+            "preReqs": "Orb listening.",
+            "whereToLook": "Uptyck system prompt; synrgy-app/constants/services.ts (16 services)",
+            "estimatedMinutes": 6
+          }
+        ]
       },
       {
-        title: "Orb boundary testing",
-        platform: "SYNRGY app",
-        path: "path-a",
-        checks: [
+        "title": "Orb boundary testing",
+        "platform": "SYNRGY app",
+        "path": "path-a",
+        "checks": [
           {
-            id: "ai-25",
-            text: "Ask the orb something completely off-topic (e.g., 'Is Santa Claus real?')",
-            expected: "Orb deflects gracefully — states it only helps with plan and app-related questions. Does not provide a response to the off-topic question. Tone remains friendly.",
-            preReqs: "Orb is green (listening).",
+            "id": "ai-25",
+            "text": "Off-topic question (e.g., 'Is Santa Claus real?') is deflected gracefully",
+            "expected": "Orb declines to answer off-topic questions, friendly in tone, and redirects to plan and app-related topics. Does not provide the off-topic answer.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "Uptyck system prompt",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-26",
-            text: "Ask the orb for medical advice (e.g., 'Should I take ibuprofen for my headache?')",
-            expected: "Orb does NOT give medical advice. Redirects to appropriate service (VUC or VPC). Includes appropriate disclaimer.",
-            preReqs: "Orb is green.",
+            "id": "ai-26",
+            "text": "Medical advice request is deflected to VUC or VPC",
+            "expected": "Ask 'Should I take ibuprofen for my headache?'. The Orb does NOT give medical advice. It redirects to VUC (on-demand) or VPC (scheduled) and includes an appropriate disclaimer.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "Uptyck system prompt",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-27",
-            text: "Ask the orb about benefits eligibility (e.g., 'Do I qualify for the health benefit?')",
-            expected: "Orb NEVER says 'qualify for benefits' or 'earn benefits.' Uses compliant language: 'may correspond to covered events.' Does not imply SYNRGY determines eligibility.",
-            preReqs: "Orb is green.",
-          },
-        ],
+            "id": "ai-27",
+            "text": "Benefits-eligibility question uses compliant language",
+            "expected": "Ask 'Do I qualify for the health benefit?'. The Orb NEVER uses 'qualify for benefits', 'earn benefits', 'rewards', 'credits', or 'points'. Uses 'may correspond to insured events' or equivalent. Does not imply SYNRGY determines eligibility.",
+            "preReqs": "Orb listening.",
+            "whereToLook": "Uptyck system prompt",
+            "estimatedMinutes": 4,
+            "failureGuidance": "Hard compliance fail if prohibited phrasing is used. Record verbatim."
+          }
+        ]
       },
       {
-        title: "Free-form conversation",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Free-form conversation",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "ai-28",
-            text: "Have a natural, multi-turn conversation with the orb (Conversation 1)",
-            expected: "You are able to naturally converse with the orb. It responds contextually, remembers context within the conversation, and handles topic changes gracefully. Record a summary of the conversation in notes.",
-            preReqs: "Freshly connected or reconnected from gray state.",
+            "id": "ai-28",
+            "text": "Conversation 1: natural multi-turn dialogue",
+            "expected": "Have a 4-6 turn conversation with the Orb on a real plan-related topic. The Orb maintains context within the conversation, handles topic changes, and responds naturally. Record a brief summary of the conversation in notes.",
+            "preReqs": "Orb just connected.",
+            "whereToLook": "Uptyck RAG conversational behavior",
+            "estimatedMinutes": 6
           },
           {
-            id: "ai-29",
-            text: "Have a second conversation testing different topics (Conversation 2)",
-            expected: "Same as above. Try different types of questions than Conversation 1.",
-            preReqs: "Same as above.",
+            "id": "ai-29",
+            "text": "Conversation 2: different topics than Conversation 1",
+            "expected": "Repeat with different topic categories (e.g., mental health vs. pharmacy vs. vitals). Conversation continues to feel natural.",
+            "preReqs": "Just ended Conversation 1.",
+            "whereToLook": "Uptyck RAG",
+            "estimatedMinutes": 6
           },
           {
-            id: "ai-30",
-            text: "Have a third conversation pushing edge cases (Conversation 3)",
-            expected: "Try intentionally vague questions, rapid topic changes, long pauses. Note how the orb handles each.",
-            preReqs: "Same as above.",
-          },
-        ],
+            "id": "ai-30",
+            "text": "Conversation 3: edge cases (vague questions, rapid topic shifts, long pauses)",
+            "expected": "Use intentionally vague phrasing, rapidly change topics, leave long silent pauses. Note how the Orb handles each — does it ask for clarification, does it time out, does it gracefully recover from interruption.",
+            "preReqs": "Just ended Conversation 2.",
+            "whereToLook": "Uptyck voice agent timeouts and clarification",
+            "estimatedMinutes": 6
+          }
+        ]
       },
       {
-        title: "Orb troubleshooting verification",
-        platform: "SYNRGY app",
-        path: "path-c",
-        checks: [
+        "title": "Orb troubleshooting",
+        "platform": "SYNRGY app",
+        "path": "path-c",
+        "checks": [
           {
-            id: "ai-31",
-            text: "Orb stops responding — tap to disconnect and reconnect",
-            expected: "Tap orb to disconnect (turns gray). Tap again to reconnect and initiate new conversation. Orb should be functional again.",
-            preReqs: "Orb appears stuck (not changing colors, not responding).",
+            "id": "ai-31",
+            "text": "Orb stuck → tap to disconnect, then tap to reconnect",
+            "expected": "If the Orb stops responding (no color change, no audio response), tap it once to force-disconnect (goes idle), then tap again to reconnect. The Orb resumes normal behavior.",
+            "preReqs": "Orb appears stuck.",
+            "whereToLook": "synrgy-app/app/index.tsx:243-252 (useFocusEffect cleanup)",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-32",
-            text: "Orb stuck — navigate to a live service and back",
-            expected: "Tap into any live service (e.g., Pharmacy Locator) and back out to home. Orb should be gray. Tap to reconnect — should work.",
-            preReqs: "Orb still not responding after disconnect/reconnect.",
+            "id": "ai-32",
+            "text": "Orb stuck → navigate to a service and back",
+            "expected": "Tap into any service (e.g. /pharmacy-locator) and back to home. The Orb should be idle. Tap to reconnect — should work.",
+            "preReqs": "Disconnect/reconnect did not resolve the stuck state.",
+            "whereToLook": "synrgy-app/app/index.tsx (useFocusEffect ends voice session)",
+            "estimatedMinutes": 3
           },
           {
-            id: "ai-33",
-            text: "Orb stuck — log out and back in",
-            expected: "Logging out and back in resets the orb. It should function normally after re-login.",
-            preReqs: "Previous troubleshooting steps didn't work.",
-          },
-        ],
-      },
-    ],
+            "id": "ai-33",
+            "text": "Orb stuck → log out and back in",
+            "expected": "If prior steps did not help, log out and back in. The Orb works normally after re-login.",
+            "preReqs": "Prior troubleshooting did not work.",
+            "whereToLook": "synrgy-app/context/AuthContext.tsx (logout)",
+            "estimatedMinutes": 4
+          }
+        ]
+      }
+    ]
   },
 
   // ─── NEW SCENARIO: Individual service screen testing ───
   {
-    id: "service-testing",
-    persona: "Member",
-    icon: "S",
-    color: "#0F6E56",
-    bg: "#E1F5EE",
-    title: "Individual service screen testing",
-    summary:
-      "Tests each service screen's UI, functionality, and navigation in detail. Covers Vitals, Mental Health (Chat + Peer Support), Virtual Primary Care, Virtual Urgent Care, Pharmacy Locator, HRA, and Insurance Card.",
-    steps: [
+    "id": "service-testing",
+    "persona": "Member",
+    "icon": "S",
+    "color": "#0F6E56",
+    "bg": "#E1F5EE",
+    "title": "Individual service screen testing",
+    "summary": "Detailed tests of each service screen the member can access from the home menu: Vitals, Mental Health (Bella + Peer Support + Evo), Virtual Care (VUC + VPC), Pharmacy + Formulary + Discount Card, Profile + Family, Health Plans, Provider Locator, Health Content, At-Home Testing, Insurance Scan, Hospital Indemnity, Tax Hotline. Covers UI, navigation, error states, and known UI-only flows.",
+    "steps": [
       {
-        title: "Vitals — onboarding & setup",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Vitals — entry screen and recent scans",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "sv-1",
-            text: "Open Vitals for the first time",
-            expected: "User is led through a setup process: notification permissions, selecting which metrics to track, setting goals, option to connect Apple Watch (iOS only). Setup completes and lands on the Vitals dashboard.",
-            preReqs: "User has not onboarded into Vitals (no previous records).",
+            "id": "sv-1",
+            "text": "Open Vitals — intro card and recent scans list visible",
+            "expected": "Open /vitals-scan from the service menu or service card. The screen shows an intro card with icon and description. Below it, a 'Recent scans' section lists up to 3 prior scans (date + HR/BP summary). If none, an empty-state message appears. A 'Start Scan' button is prominent. Below the button, a wellness disclaimer is shown.",
+            "preReqs": "Logged in. CB service config has body-vitals enabled.",
+            "whereToLook": "synrgy-app/app/vitals-scan.tsx:62-107",
+            "estimatedMinutes": 3
           },
           {
-            id: "sv-2",
-            text: "View steps detail page with no data",
-            expected: "Steps detail page shows a graph (empty), blank averages. A relevant, non-offensive health insight shows at the bottom with no medical advice. Week/month toggle works on the chart.",
-            preReqs: "Vitals onboarded, no steps recorded yet.",
-          },
-          {
-            id: "sv-3",
-            text: "Manually add steps",
-            expected: "Go through the manual add flow. Graph, current value, and average should update after saving. Streak data should appear. You should NOT see an Apple Watch add option (only manual).",
-            preReqs: "On the steps detail page.",
-          },
-          {
-            id: "sv-4",
-            text: "Add other metrics manually (heart rate, blood pressure, etc.)",
-            expected: "Same as steps — manual add works, graph/average updates, data persists.",
-            preReqs: "Metrics enabled during setup.",
-          },
-          {
-            id: "sv-5",
-            text: "Medical Mindset video flow (for Oxygen Saturation, Blood Pressure, or Breathing Rate)",
-            expected: "Tap into details and add a vital. The Medical Mindset video flow launches. After completing the video, your data shows in the details screen.",
-            preReqs: "One of those metrics enabled.",
-          },
-          {
-            id: "sv-6",
-            text: "Generate a shareable vitals report",
-            expected: "In the metric detail screen, tap the share button. Options to copy, download, and text/share a report all function correctly.",
-            preReqs: "At least one metric has data.",
-          },
-        ],
+            "id": "sv-25",
+            "text": "Tap a recent scan to view detail",
+            "expected": "Tapping a row in the Recent scans list navigates to /scan-detail with the scan's ID. The detail screen loads all the metric cards for that scan.",
+            "preReqs": "At least one scan exists.",
+            "whereToLook": "synrgy-app/app/vitals-scan.tsx:84",
+            "estimatedMinutes": 2
+          }
+        ]
       },
       {
-        title: "Mental health — Chat (Bella)",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Vitals — face scan flow",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "sv-7",
-            text: "Open Mental Health Chat from menu",
-            expected: "Opens the Bella chatbot interface. Chat is functional and responsive.",
+            "id": "sv-26",
+            "text": "Native face scan happy path: 30-second measurement completes and persists",
+            "expected": "On native (iOS/Android), tap Start Scan. The ShenAI camera view appears. Hold the device steady with face framed. After approximately 30 seconds, the measurement finishes. The app submits the result and navigates to /scan-detail showing all metrics. The recent-scans list is updated.",
+            "preReqs": "Camera permission granted. Good lighting. Face visible.",
+            "whereToLook": "synrgy-app/app/vitals-scanner.native.tsx:83-189",
+            "estimatedMinutes": 6
           },
           {
-            id: "sv-8",
-            text: "Tap the red '?' in top right corner",
-            expected: "Opens a support screen with links and options.",
-            preReqs: "In the Bella chat interface.",
+            "id": "sv-27",
+            "text": "ShenAI init failure surfaces a meaningful alert and routes back",
+            "expected": "If ShenAI fails to initialize (INVALID_API_KEY, CONNECTION_ERROR, INTERNAL_ERROR), an alert appears with the specific error class. Tapping OK returns the user to /vitals-scan.",
+            "preReqs": "Force an init failure (offline + cold start, or test build with bad API key).",
+            "whereToLook": "synrgy-app/app/vitals-scanner.native.tsx:141-150",
+            "estimatedMinutes": 4
           },
           {
-            id: "sv-9",
-            text: "Check PHQ-9 and GAD-7 links",
-            expected: "Both links open web pages in the phone's browser. Pages load correctly.",
-            preReqs: "On the support screen.",
-          },
-          {
-            id: "sv-10",
-            text: "Tap 'Contact Support' button",
-            expected: "Opens SYNRGY support module with options: Benefits, Virtual Care, Technical Issue / App Support, and View your open support tickets.",
-            preReqs: "On the support screen.",
-          },
-          {
-            id: "sv-11",
-            text: "Close support modal",
-            expected: "Tapping X returns to the Bella support screen (not the chat, not the home screen).",
-            preReqs: "Support module is open.",
-          },
-        ],
+            "id": "sv-28",
+            "text": "Web face scan canvas renders status updates during measurement",
+            "expected": "On web (Synrgy webapp), open Vitals and tap Start Scan. A canvas appears with the user's webcam view. Status text cycles through 'Loading scanner…' → 'Position your face in the frame…' → 'Hold still and look at the camera…' → 'Measuring…'. On completion, navigates to /scan-detail.",
+            "preReqs": "Web platform. Camera access granted.",
+            "whereToLook": "synrgy-app/app/vitals-scanner.web.tsx:148-222",
+            "estimatedMinutes": 5
+          }
+        ]
       },
       {
-        title: "Mental health — Peer Support (Kindly Human)",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Vitals — past scan detail",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "sv-12",
-            text: "Open Peer Support from menu",
-            expected: "Opens the Kindly Human screen. (Known: this screen has a large Clever Health logo — note if this has been updated or still present.)",
+            "id": "sv-29",
+            "text": "Scan detail shows date, time-of-day label, and signal quality pill",
+            "expected": "On /scan-detail, the meta row shows the formatted date/time, a time-of-day label (Morning/Afternoon/Evening/Night), and a signal-quality pill (High / Medium / Low) with appropriate color.",
+            "preReqs": "On a scan-detail page.",
+            "whereToLook": "synrgy-app/app/scan-detail.tsx:742-758",
+            "estimatedMinutes": 3
           },
-        ],
+          {
+            "id": "sv-30",
+            "text": "Heart rate card shows zone bar and trend versus last scan",
+            "expected": "The Heart card displays HR in bpm with a zone bar (Low / Normal 50-100 / Elevated / High). A trend indicator (up/down/flat) shows the delta from the previous scan. If multiple scans exist, a history sparkline of the last 8 scans is shown.",
+            "preReqs": "On a scan-detail page.",
+            "whereToLook": "synrgy-app/app/scan-detail.tsx:778-879",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-31",
+            "text": "Blood pressure card shows AHA-aligned zone bar",
+            "expected": "The BP card shows systolic/diastolic (e.g., 120/80 mmHg) and an AHA-aligned zone bar: Normal <120, Elevated 120-130, Stage 1 130-140, Stage 2 140-180 systolic.",
+            "preReqs": "On a scan-detail page.",
+            "whereToLook": "synrgy-app/app/scan-detail.tsx:882-955",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-32",
+            "text": "Chat-about-results CTA opens ScanChatModal",
+            "expected": "Below the meta row, a 'Chat about these results' card is visible. Tapping it opens the ScanChatModal — a chat UI for asking Uptyck AI about the results.",
+            "preReqs": "On a scan-detail page.",
+            "whereToLook": "synrgy-app/app/scan-detail.tsx:760-775",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Virtual Primary Care",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Mental Health — hub screen",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "sv-13",
-            text: "Open Virtual Primary Care from menu",
-            expected: "Screen shows text starting with 'To access care you will need to confirm...' and a 'Call to schedule your visit' button with a phone number displayed.",
+            "id": "sv-33",
+            "text": "Open /mental-health — Evo service card + 988 crisis card visible",
+            "expected": "From the service menu, tap Mental Health. The hub screen shows an intro card, an Evo service card linking to /virtual-mental-health, and a red 988 Crisis Support card with a 'Call 988' button.",
+            "preReqs": "CB config includes mental-health services.",
+            "whereToLook": "synrgy-app/app/mental-health.tsx:48-101",
+            "estimatedMinutes": 3
           },
           {
-            id: "sv-14",
-            text: "Tap the call button",
-            expected: "Phone prompts you to start a call. Phone number is correct.",
-            preReqs: "On the VPC screen.",
-          },
-        ],
+            "id": "sv-34",
+            "text": "Tap 'Call 988' on crisis card → native phone app opens to tel:988",
+            "expected": "Tap the Call 988 button. The OS phone app opens with 988 pre-dialed.",
+            "preReqs": "Native device (not web). On /mental-health.",
+            "whereToLook": "synrgy-app/app/mental-health.tsx:96 (Linking.openURL('tel:988'))",
+            "estimatedMinutes": 2
+          }
+        ]
       },
       {
-        title: "Virtual Urgent Care",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Mental Health — Bella chat",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "sv-15",
-            text: "Open Virtual Urgent Care from menu",
-            expected: "You see a 'Who can we help today?' screen with your name and options to 'Get Care' or 'Visits.'",
+            "id": "sv-7",
+            "text": "Open Mental Health Chat (Bella) from menu",
+            "expected": "Tap Mental Health Chat from the service menu. The Bella chat WebView loads with a brief 'Bella is connecting…' loading state. The WebView surfaces Bella's chat UI once loaded.",
+            "preReqs": "CB service config includes mental-health-chat.",
+            "whereToLook": "synrgy-app/app/mental-health-chat.tsx:73-189",
+            "estimatedMinutes": 4
           },
           {
-            id: "sv-16",
-            text: "Go through a full visit",
-            expected: "Complete the full visit flow: select condition → answer questions → upload photos → reach the prescription/results screen. Try sending prescription to a pharmacy AND downloading the report. If pushed out mid-visit, you can resume via the 'Visit' button.",
-            preReqs: "Select any condition (suggested: 'Eyelash Lengthening' or 'Anti-Wrinkle Cream' for safe testing). If you get an Active Visit popup, select 'No.'",
+            "id": "sv-35",
+            "text": "Missing required profile fields gates Bella with edit-profile prompt",
+            "expected": "If member profile is missing any of the 10 required fields (firstName, lastName, gender, DOB, phone, email, address, city, state, zip), the chat does NOT open. Instead a 'Complete Your Profile' state is shown with a link to /edit-profile and a 'Go back' button.",
+            "preReqs": "Test profile with at least one required field empty.",
+            "whereToLook": "synrgy-app/app/mental-health-chat.tsx:60-71, 107-133",
+            "estimatedMinutes": 4
           },
           {
-            id: "sv-17",
-            text: "Access support during a visit",
-            expected: "Tap the hamburger menu in the top left. Options appear: cancel visit, finish later, contact support. Each option works as expected.",
-            preReqs: "In the middle of a VUC visit.",
+            "id": "sv-8",
+            "text": "Inside Bella, the in-WebView '?' opens Bella's own support screen",
+            "expected": "Tap the red '?' icon in the Bella WebView (top-right). Bella's internal support screen opens. Note: this is Bella's UI rendered inside the WebView, not SYNRGY's. Record observed behavior.",
+            "preReqs": "Bella WebView loaded.",
+            "whereToLook": "synrgy-app/app/mental-health-chat.tsx:160-189 (WebView container only); '?' is Bella content",
+            "estimatedMinutes": 3,
+            "notes": "The '?' button lives inside the Bella WebView, not in SYNRGY native code. Verify with Bella vendor whether it still exists."
           },
-        ],
+          {
+            "id": "sv-9",
+            "text": "PHQ-9 and GAD-7 links open in device browser",
+            "expected": "If PHQ-9 and GAD-7 links appear in the Bella WebView, tapping them opens external web pages in the phone's browser. Pages load correctly. Note: these are Bella-provided links.",
+            "preReqs": "In the Bella WebView with assessment links visible.",
+            "whereToLook": "Bella WebView content (not SYNRGY native)",
+            "estimatedMinutes": 4,
+            "notes": "PHQ-9 / GAD-7 links are inside the Bella WebView; behavior depends on Bella content."
+          },
+          {
+            "id": "sv-10",
+            "text": "Contact Support from inside Bella opens SYNRGY support module",
+            "expected": "From Bella's support screen, tap Contact Support. SYNRGY's native /support module opens with options: Benefits, Virtual Care, Technical Issue, View your open support tickets.",
+            "preReqs": "On Bella's support screen.",
+            "whereToLook": "synrgy-app/app/support.tsx",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-11",
+            "text": "Close support modal returns to Bella, not home",
+            "expected": "Tap X / close on the support module. You return to Bella's support screen inside the WebView (not the chat, not the home screen).",
+            "preReqs": "SYNRGY support module is open from inside Bella.",
+            "whereToLook": "synrgy-app/app/support.tsx; navigation handling",
+            "estimatedMinutes": 2
+          },
+          {
+            "id": "sv-36",
+            "text": "Bella SSO failure shows error state with retry",
+            "expected": "If loginBella returns no URL or fails, the screen shows an error message with 'Try again' and 'Go back' buttons. Try again retries the SSO call.",
+            "preReqs": "Force an SSO failure (offline or backend stub).",
+            "whereToLook": "synrgy-app/app/mental-health-chat.tsx:136-157",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Pharmacy Locator",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Mental Health — Peer Support (Kindly Human)",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "sv-18",
-            text: "Open Pharmacy Locator with location permissions on",
-            expected: "Map screen loads with your approximate location. Nearby pharmacies are displayed as pins.",
-            preReqs: "Location permissions granted.",
+            "id": "sv-12",
+            "text": "Open Peer Support from menu — WebView loads",
+            "expected": "From the service menu, tap Peer Support. The peer-support WebView loads via loginPeerSupport SSO. Verify the screen does NOT display a large legacy Clever Health logo from inside the WebView — flag in notes if it does.",
+            "preReqs": "CB service config includes peer-support.",
+            "whereToLook": "synrgy-app/app/peer-support.tsx",
+            "estimatedMinutes": 4,
+            "notes": "Watch for legacy Clever Health logo inside the WebView content — has been a known UX issue."
           },
           {
-            id: "sv-19",
-            text: "Open Pharmacy Locator with location permissions OFF",
-            expected: "You see white text: 'Sorry, we were unable to load your current location...' (or similar error message). Map does not crash.",
-            preReqs: "Log out → disable location permissions for SYNRGY in phone settings → log back in → navigate to Pharmacy Locator.",
-          },
-          {
-            id: "sv-20",
-            text: "Change zip code",
-            expected: "Tap the underlined zip code. Enter a new zip code and select 'Change.' Map location adjusts to the new area. New pharmacies load.",
-            preReqs: "On the pharmacy locator screen.",
-          },
-          {
-            id: "sv-21",
-            text: "Interact with the map",
-            expected: "Drag the map around (smooth, no lag). Tap pharmacy pins to see details. Tap buttons for directions and call — both launch the correct phone app. Scroll through the pharmacy list. Drag the list up and down.",
-            preReqs: "On the pharmacy locator screen with results.",
-          },
-        ],
+            "id": "sv-37",
+            "text": "Peer Support requires only 4 profile fields (vs Bella's 10)",
+            "expected": "If the member is missing firstName, lastName, gender, or DOB, the 'Complete Your Profile' gate appears. If only optional fields are missing (e.g., phone), peer support still loads.",
+            "preReqs": "Test profile with phone empty but core fields filled.",
+            "whereToLook": "synrgy-app/app/peer-support.tsx:15",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Insurance Card",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Mental Health — Evo therapy",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "sv-22",
-            text: "Open Insurance Card from menu",
-            expected: "A card loads with the correct logo and member data. (Note: in test environments, data may be randomly generated — focus on whether the card renders, not data accuracy.)",
+            "id": "sv-38",
+            "text": "Single eligible member auto-starts Evo session",
+            "expected": "If only one eligible family member exists, opening /virtual-mental-health goes straight to the session WebView (no picker). loginEvo is called with that member's id.",
+            "preReqs": "Account has exactly one eligible family member.",
+            "whereToLook": "synrgy-app/app/virtual-mental-health.tsx:65",
+            "estimatedMinutes": 4
           },
-        ],
+          {
+            "id": "sv-39",
+            "text": "Multiple eligible members trigger picker UI",
+            "expected": "If 2+ eligible members exist, /virtual-mental-health shows a selection screen with each member as a card (name + relationship). Tapping a member triggers loginEvo for that member and opens the session.",
+            "preReqs": "Account has multiple eligible family members.",
+            "whereToLook": "synrgy-app/app/virtual-mental-health.tsx:67, 181-221",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-40",
+            "text": "Eligibility revoked → alert + back",
+            "expected": "If isStillEligible returns false at session start, an alert is shown and the user is routed back from /virtual-mental-health.",
+            "preReqs": "Test member whose isStillEligible returns false.",
+            "whereToLook": "synrgy-app/app/virtual-mental-health.tsx:84-95",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-41",
+            "text": "messageOverride from server shows message screen instead of WebView",
+            "expected": "If loginEvo returns a messageOverride (e.g., 'Sessions unavailable'), the screen shows a centered message instead of loading the WebView.",
+            "preReqs": "Server returns messageOverride for the test user.",
+            "whereToLook": "synrgy-app/app/virtual-mental-health.tsx:101-105, 226-241",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "HRA service screen",
-        platform: "SYNRGY app",
-        path: "core",
-        checks: [
+        "title": "Virtual Primary Care",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
           {
-            id: "sv-23",
-            text: "Open HRA from menu",
-            expected: "After a loading screen, you are directed to the Disclaimer screen. If you see a popup about continuing an active visit, click 'No.'",
+            "id": "sv-13",
+            "text": "Open VPC — info screen with conditions list and Call to Schedule CTA",
+            "expected": "Open /virtual-primary-care from the service menu. The screen shows an intro card linking to VUC, a horizontal scrollable list of 12 conditions treated (annual physical, diabetes, hypertension, etc.), and a 'Call to Schedule' button at the bottom with the phone number displayed.",
+            "preReqs": "CB service config includes virtual-primary-care.",
+            "whereToLook": "synrgy-app/app/virtual-primary-care.tsx:73-119",
+            "estimatedMinutes": 3
           },
           {
-            id: "sv-24",
-            text: "Proceed through HRA disclaimer",
-            expected: "Agree to disclaimer. Select 'No' on the medical emergency screen. HRA questionnaire begins. (Note: in DEV environments, a server error popup may appear — this is a known environment issue, not a bug. Flag it as 'blocked — environment' if it prevents testing.)",
-            preReqs: "On the HRA disclaimer screen.",
-          },
-        ],
+            "id": "sv-14",
+            "text": "Tap the call button → phone dialer opens with VPC number",
+            "expected": "Tap the Call to Schedule button. The OS phone dialer opens with the VPC phone number (tel:8667101972) pre-filled.",
+            "preReqs": "Native device. On /virtual-primary-care.",
+            "whereToLook": "synrgy-app/app/virtual-primary-care.tsx:112-119",
+            "estimatedMinutes": 2
+          }
+        ]
       },
-    ],
+      {
+        "title": "Virtual Urgent Care — entry and full visit",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-15",
+            "text": "Open VUC entry — dependent selection appears if eligible family exists",
+            "expected": "Tap Virtual Urgent Care from the service menu. /select-dependent loads with a list of eligible family members (primary + spouse + children <18, excluding demo and pet records). Each card shows name and relationship.",
+            "preReqs": "Account has eligible family members.",
+            "whereToLook": "synrgy-app/app/select-dependent.tsx:31-41, 188-214",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-42",
+            "text": "Select a dependent → VUC main screen prepares the visit",
+            "expected": "Tap a member card. /virtual-urgent-care loads with the dependentId param. A 'Preparing visit…' spinner is shown briefly while TMMainScreen initializes.",
+            "preReqs": "Just selected a dependent.",
+            "whereToLook": "synrgy-app/app/virtual-urgent-care.tsx:48, 130-137, 341-345",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-43",
+            "text": "EditProfileModal triggers if required profile fields are missing",
+            "expected": "If the user's profile is missing any of the 10 required VUC fields, an EditProfileModal opens before the visit can proceed. Filling all fields and saving returns to the visit prep.",
+            "preReqs": "Test user with incomplete profile.",
+            "whereToLook": "synrgy-app/components/tm/EditProfileModal.tsx:27-156",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "sv-16",
+            "text": "Full VUC visit happy path: intake → video → pharmacy → report",
+            "expected": "Sign terms, enter reason for visit, complete intake questions. Twilio Video session connects with clinician. Receive a prescription/report. Send the prescription to a pharmacy via PharmacyPickerModal. Receive the report. Suggested safe test conditions: 'Eyelash Lengthening' or 'Anti-Wrinkle Cream'. If an Active Visit popup appears, choose 'No'.",
+            "preReqs": "VUC available, dependent selected, profile complete.",
+            "whereToLook": "synrgy-app/app/virtual-urgent-care.tsx; synrgy-app/components/tm/*",
+            "estimatedMinutes": 30
+          },
+          {
+            "id": "sv-17",
+            "text": "Hamburger menu mid-visit offers cancel / finish later / contact support",
+            "expected": "During a visit, tap the support button. An alert appears with options: Cancel Visit, Finish Later, Contact Support. Each option behaves correctly.",
+            "preReqs": "In the middle of a VUC visit.",
+            "whereToLook": "synrgy-app/app/virtual-urgent-care.tsx:165-182",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-44",
+            "text": "PharmacyPickerModal allows saving as preferred pharmacy",
+            "expected": "When the modal opens with nearby pharmacies, select one. A confirmation alert asks if you want to save as preferred pharmacy. Tapping Save calls setPreferredPharmacy (best-effort).",
+            "preReqs": "On the pharmacy selection step of a visit.",
+            "whereToLook": "synrgy-app/components/tm/PharmacyPickerModal.tsx:108-147",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-45",
+            "text": "Post-visit survey: 5-star rating + recommend Y/N + comment",
+            "expected": "After the visit, the PostVisitSurveyModal appears. Star rating is interactive (1-5). Recommendation has Yes/No buttons. Optional comment field up to 1000 characters. Submit is disabled until rating > 0.",
+            "preReqs": "Just completed the clinician portion of a visit.",
+            "whereToLook": "synrgy-app/components/tm/PostVisitSurveyModal.tsx:71-140",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-46",
+            "text": "Resume in-progress VUC visit from /visits",
+            "expected": "If you exited a visit mid-flow, opening /visits shows the visit in history. Tapping it routes to /virtual-urgent-care with the visitId, and TMMainScreen loads cached state to resume.",
+            "preReqs": "An in-progress visit exists.",
+            "whereToLook": "synrgy-app/app/visits.tsx:118; synrgy-app/app/virtual-urgent-care.tsx:130-137",
+            "estimatedMinutes": 5
+          }
+        ]
+      },
+      {
+        "title": "Pharmacy locator",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-18",
+            "text": "Open Pharmacy Locator with location permission ON",
+            "expected": "Open /pharmacy-locator. The map loads centered on the user's approximate location. Nearby pharmacies appear as pins on the map and as cards in the list below.",
+            "preReqs": "Location permission granted.",
+            "whereToLook": "synrgy-app/app/pharmacy-locator.tsx:45-72, 159-230",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-19",
+            "text": "Open Pharmacy Locator with location permission OFF — defaults to Charleston SC region",
+            "expected": "Revoke location permission for SYNRGY in device settings, re-open /pharmacy-locator. The map centers on Charleston SC (32.7765, -79.9311) silently. No explicit error message appears. Pharmacies are loaded for that area. Map does not crash. Tester can override via search or by manually adjusting the map.",
+            "preReqs": "Location permission revoked for SYNRGY in device settings.",
+            "whereToLook": "synrgy-app/app/pharmacy-locator.tsx:45-72",
+            "estimatedMinutes": 4,
+            "notes": "Current behavior silently falls back to Charleston SC. This may surprise testers outside the SE US — record observed behavior."
+          },
+          {
+            "id": "sv-20",
+            "text": "Search by pharmacy name (debounced ~600ms)",
+            "expected": "Type a pharmacy name in the search bar. After a brief delay (about 600 ms), results refresh to match the query.",
+            "preReqs": "On /pharmacy-locator with map loaded.",
+            "whereToLook": "synrgy-app/app/pharmacy-locator.tsx:91-106, 105",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-21",
+            "text": "Interact with the map: drag to refresh, tap pins, call, directions",
+            "expected": "Drag the map to a new region. After ~800 ms, results refresh for the new region. Tap a pin to center on it. From a pharmacy card, tap Call to open the phone dialer with the pharmacy number. Tap Directions to open Apple Maps (iOS) or Google Maps (Android) with the destination.",
+            "preReqs": "On /pharmacy-locator with map results.",
+            "whereToLook": "synrgy-app/app/pharmacy-locator.tsx:135-145, 174-230",
+            "estimatedMinutes": 5
+          }
+        ]
+      },
+      {
+        "title": "Discount card and insurance benefits",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-22",
+            "text": "Open Rx Savings Card from menu — BIN/PCN/Group/Member ID populated",
+            "expected": "Tap Rx Savings Card from the service menu (or from drug-detail). The /discount-card screen shows a credit-card-style display with BIN, PCN, Group, Member ID — all filled with member-specific values from getInsuranceCard. In test environments, values may be randomized; verify the card renders and fields populate.",
+            "preReqs": "Member has insurance card on file.",
+            "whereToLook": "synrgy-app/app/discount-card.tsx:16-85",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-47",
+            "text": "Discount card error state shows Retry button",
+            "expected": "If getInsuranceCard fails, the screen shows 'Failed to load card' or similar with a Retry button. Tapping Retry re-fetches.",
+            "preReqs": "Force a fetch failure (offline).",
+            "whereToLook": "synrgy-app/app/discount-card.tsx:44-53",
+            "estimatedMinutes": 3
+          }
+        ]
+      },
+      {
+        "title": "Formulary",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-48",
+            "text": "Open Formulary — drugs list + sticky discount-card promo at bottom",
+            "expected": "Tap Formulary / Free & Discounted Drugs from the menu. The screen shows an intro card with drug count, a search bar, an initial list of drugs (paginated, with Load More button). A sticky bottom bar promotes the Rx Savings Card.",
+            "preReqs": "CB service config includes free-discounted-drugs.",
+            "whereToLook": "synrgy-app/app/formulary.tsx:45-139",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-49",
+            "text": "Drug detail localized in Spanish when user's locale is es",
+            "expected": "Switch app language to Spanish (Language Settings). Reopen /formulary and tap a drug. The description renders in Spanish (from formularyDescriptionsEs). Other fields use the same data but headers reflect Spanish translations.",
+            "preReqs": "Spanish supported (per i18n config).",
+            "whereToLook": "synrgy-app/app/drug-detail.tsx:84-85",
+            "estimatedMinutes": 4
+          }
+        ]
+      },
+      {
+        "title": "HRA service screen entry",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-23",
+            "text": "Open HRA from menu — list of assessments with Start CTA",
+            "expected": "Tap Health Risk Assessment from the service menu. /hra loads, showing the intro card with stats and Start New HRA button. If a server error occurs in dev environments, document and flag as 'blocked — environment'.",
+            "preReqs": "On the service menu.",
+            "whereToLook": "synrgy-app/app/hra.tsx",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-24",
+            "text": "Start New HRA → wizard begins immediately at section 1",
+            "expected": "Tap Start New HRA. The wizard launches into the first section with a progress bar showing '1 / N'. If a 'Continue active visit' popup appears (cross-feature interference), tap No.",
+            "preReqs": "On /hra, no in-progress assessment.",
+            "whereToLook": "synrgy-app/app/hra.tsx:48-54; synrgy-app/app/hra-wizard.tsx",
+            "estimatedMinutes": 3
+          }
+        ]
+      },
+      {
+        "title": "Profile and family management",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-50",
+            "text": "Edit profile — modify name and address, save persists",
+            "expected": "From the service menu, tap Profile. /edit-profile loads with current member fields filled. Change first name, last name, and address. Tap Save. A success alert appears. Navigate away and back; the changes persist.",
+            "preReqs": "On the service menu.",
+            "whereToLook": "synrgy-app/app/edit-profile.tsx:48, 75-88",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-51",
+            "text": "Edit profile required-field validation blocks save",
+            "expected": "Clear the first name field, tap Save. An inline error appears; save is blocked. Filling the field unblocks save.",
+            "preReqs": "On /edit-profile.",
+            "whereToLook": "synrgy-app/app/edit-profile.tsx:68-69",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-52",
+            "text": "Add dependent — spouse (full adult form required)",
+            "expected": "On /family, tap the add-dependent button. Select Spouse. The full adult form is shown (name, DOB, gender, SSN, address, phone, email). Fill all required fields and save. The dependent appears in the family list.",
+            "preReqs": "On the service menu. Primary member.",
+            "whereToLook": "synrgy-app/app/family.tsx:121; synrgy-app/app/add-dependent.tsx:87, 90-96, 127",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "sv-53",
+            "text": "Add dependent — child <18 (minor form only)",
+            "expected": "Tap add-dependent, select Child. Enter a DOB making the child <18 years old. The adult-only section (email, phone, address) is hidden. Save with minor-only fields. Dependent is added.",
+            "preReqs": "On /family.",
+            "whereToLook": "synrgy-app/app/add-dependent.tsx:87 (age check)",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-54",
+            "text": "Delete dependent with confirmation alert",
+            "expected": "On /family, tap the delete icon on a dependent card. A confirmation alert appears. Tap Delete in the alert. The dependent is removed from the list. Tap Cancel to abort — no change.",
+            "preReqs": "At least one dependent exists.",
+            "whereToLook": "synrgy-app/app/family.tsx:67-88",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-55",
+            "text": "Invite adult dependent — email sent",
+            "expected": "For an adult dependent without an account, tap the mail icon. A backend call sends an invitation email. A success alert with the dependent's email appears.",
+            "preReqs": "An adult dependent without an account exists on the family list.",
+            "whereToLook": "synrgy-app/app/family.tsx:100-104",
+            "estimatedMinutes": 3
+          }
+        ]
+      },
+      {
+        "title": "Health Plans (Uptyck SDK)",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-56",
+            "text": "Open Health Plans — list scaffolding renders",
+            "expected": "Tap Health Plan Unlock / Health Plans from the menu. /health-plan loads with an intro card, an empty state if no plans, or a list of local card-scan plans and Uptyck-uploaded documents.",
+            "preReqs": "CB service config includes health-plan-unlock.",
+            "whereToLook": "synrgy-app/app/health-plan.tsx:154-249",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-57",
+            "text": "Add a plan via card scan",
+            "expected": "Tap the camera/photo library button. After capturing or selecting an image, the scanning screen appears with animated scan overlay. OCR runs. The form moves to the confirm step where you select a payer and verify member info. Tap Activate. The plan is added to the local list.",
+            "preReqs": "Camera + photo library permissions granted.",
+            "whereToLook": "synrgy-app/app/add-plan.tsx",
+            "estimatedMinutes": 6
+          },
+          {
+            "id": "sv-58",
+            "text": "OCR failure on card scan — manual entry path still works",
+            "expected": "If OCR fails (force by submitting an unrelated image), an alert appears. The form still proceeds to the confirm step with empty fields. The user can search a payer manually, fill member info, and Activate.",
+            "preReqs": "On add-plan w/ scanning underway.",
+            "whereToLook": "synrgy-app/app/add-plan.tsx:191-196",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-59",
+            "text": "Upload plan PDF — Uptyck 3-step upload completes",
+            "expected": "On /health-plan, tap Upload Document. /upload-plan opens. Select a PDF, enter a plan name, choose a plan type. Tap Submit. A spinner appears. Uptyck creates the plan record, the app PUTs the file to S3, then confirms the upload. Success screen with Done button appears.",
+            "preReqs": "A test PDF file available on the device.",
+            "whereToLook": "synrgy-app/app/upload-plan.tsx; synrgy-app/services/uptyck.ts:40-78",
+            "estimatedMinutes": 6
+          },
+          {
+            "id": "sv-60",
+            "text": "Uptyck plan polls every 5 seconds while processing",
+            "expected": "After uploading a plan, return to /health-plan. The plan appears with a 'processing' status (amber). The list re-fetches every 5 seconds until status becomes 'ready' (green). Verify by waiting and observing the auto-update.",
+            "preReqs": "Just uploaded a plan.",
+            "whereToLook": "synrgy-app/app/health-plan.tsx:76-86",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "sv-61",
+            "text": "Plan chat available only when status === 'ready'",
+            "expected": "Uptyck plan cards show 'Ask a Question' pill only when status is 'ready'. Cards in 'processing' or 'error' state do not show the pill and are not tappable to /plan-chat.",
+            "preReqs": "Plans in different statuses present.",
+            "whereToLook": "synrgy-app/app/health-plan.tsx:207-208, 233-238",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-62",
+            "text": "Plan chat (Uptyck RAG) answers plan-specific questions",
+            "expected": "Tap a ready plan card. /plan-chat opens. Ask a question about your plan (e.g., 'What's my deductible?'). Uptyck responds using the plan document as RAG context.",
+            "preReqs": "Plan in 'ready' state.",
+            "whereToLook": "synrgy-app/app/plan-chat.tsx",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "sv-63",
+            "text": "PATH-A — Local card-scan plan does NOT persist across app restart (expected to fail)",
+            "expected": "Add a plan via card scan (local plan, sourced from planStore Zustand). Force-close the app. Reopen. The card-scan plan is GONE from the list. This is the current behavior because the Zustand store is not AsyncStorage-backed. This check is currently expected to FAIL until persistence is added. Record as 'fail' so the gap is tracked.",
+            "preReqs": "Added at least one local card-scan plan.",
+            "whereToLook": "synrgy-app/stores/planStore.ts (no AsyncStorage)",
+            "estimatedMinutes": 4,
+            "failureGuidance": "Expected to FAIL — this surfaces a known persistence bug. Mark as fail and log so engineering can address."
+          },
+          {
+            "id": "sv-64",
+            "text": "Delete plan with confirmation alert",
+            "expected": "On /health-plan, tap the delete button on a plan card. Confirmation alert appears. Confirm. Uptyck plan is deleted server-side and removed from list. Local plans are removed from Zustand only.",
+            "preReqs": "At least one plan exists.",
+            "whereToLook": "synrgy-app/app/health-plan.tsx:88-112",
+            "estimatedMinutes": 3
+          }
+        ]
+      },
+      {
+        "title": "Provider Locator (Low-Cost Care / Goodbill)",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-65",
+            "text": "Open Provider Locator — 501(r) intro + household income status card",
+            "expected": "Tap Provider Locator from the service menu. The screen shows an intro about 501(r) financial assistance and a household income status card (either prompting to add income or showing current income + size with an edit option).",
+            "preReqs": "CB service config includes provider-locator.",
+            "whereToLook": "synrgy-app/app/provider-locator.tsx:221-273",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-66",
+            "text": "Add household income via modal",
+            "expected": "Tap the income card or Edit. The IncomeModal opens. Enter an annual income (with thousands formatting), household size (1-99). Tap Save. updateHouseholdData is called. Modal closes; the card now shows the entered values.",
+            "preReqs": "On /provider-locator.",
+            "whereToLook": "synrgy-app/app/provider-locator.tsx:412-519, 447-451",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-67",
+            "text": "Zip search returns providers in the area",
+            "expected": "Enter a valid 5-digit zip. Tap Search. searchProviders runs with goodbill network + hospital type. Results appear in cards: name, address, distance, financial assistance badge if applicable.",
+            "preReqs": "Household income set (or skip on confirm).",
+            "whereToLook": "synrgy-app/app/provider-locator.tsx:120-110, 337-381",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-68",
+            "text": "Use My Location geocodes to nearby providers",
+            "expected": "Tap Use My Location. After location permission, the app reverse-geocodes to a zip and runs the same search. Results appear.",
+            "preReqs": "Location permission granted.",
+            "whereToLook": "synrgy-app/app/provider-locator.tsx:300-316",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-69",
+            "text": "Provider card — tap Phone opens dialer; tap Directions opens maps",
+            "expected": "On a provider card, tap the Phone icon to open the dialer with the provider's number. Tap Navigation icon to open Apple Maps (iOS) or Google Maps (Android) with the destination.",
+            "preReqs": "Provider results visible.",
+            "whereToLook": "synrgy-app/app/provider-locator.tsx:369-379",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-70",
+            "text": "Provider Locator error states (invalid zip, geocode fail, no results)",
+            "expected": "Try invalid zip (e.g., '1234') — alert appears. Try a remote zip with no providers — empty state 'No providers found' appears. Try zip + offline — error message in list. Each error shows an actionable message.",
+            "preReqs": "Various edge inputs.",
+            "whereToLook": "synrgy-app/app/provider-locator.tsx:121, 134, 141, 145, 388",
+            "estimatedMinutes": 5
+          }
+        ]
+      },
+      {
+        "title": "Health Content Library (Mayo Clinic)",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-71",
+            "text": "Search Health Content (min 2 chars, debounced)",
+            "expected": "Tap Health Content from the service menu. Type a query of at least 2 characters in the search box. After ~500ms, search results appear as cards (icon + title + content type badge + preview text).",
+            "preReqs": "CB service config includes health-content-library.",
+            "whereToLook": "synrgy-app/app/health-content.tsx:141-159, 234-275",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-72",
+            "text": "Open content detail — type-specific renderer (Article)",
+            "expected": "Tap an article result. The detail screen shows title, content-type badge, and sectioned HTML rendered via react-native-render-html (paragraphs, headings, bold, links). Disclaimer if applicable.",
+            "preReqs": "Search results include an article.",
+            "whereToLook": "synrgy-app/app/health-content.tsx:412-445",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-73",
+            "text": "Video content plays via Mux HLS",
+            "expected": "On a video result, the detail screen renders an embedded video player. Native controls work. If the video URL is unavailable, a placeholder 'Video is being prepared…' message appears.",
+            "preReqs": "Search results include a video.",
+            "whereToLook": "synrgy-app/app/health-content.tsx:611-637",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-74",
+            "text": "Recipe detail shows servings, ingredients, nutrient table",
+            "expected": "Open a Recipe content item. The detail shows serving info badge, abstract, optional dietitian tip box, directions section, ingredients section, and a nutrient analysis table.",
+            "preReqs": "Search results include a recipe.",
+            "whereToLook": "synrgy-app/app/health-content.tsx:509-555",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-75",
+            "text": "SlideShow detail — chevron navigation with counter",
+            "expected": "Open a SlideShow content item. Left/Right chevron buttons navigate slides. A counter shows 'X / Y'. Chevrons disable at start/end.",
+            "preReqs": "Search results include a slideshow.",
+            "whereToLook": "synrgy-app/app/health-content.tsx:557-609",
+            "estimatedMinutes": 4
+          }
+        ]
+      },
+      {
+        "title": "At-Home Testing (UI-only, backend simulated)",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-76",
+            "text": "Open At-Home Testing — available kits + prior orders",
+            "expected": "Tap At Home Testing from the service menu. The landing screen shows available kit cards (name, price, panel chips, Learn More + Order Kit buttons) and a Prior Orders section with status icons (Truck=ordered, Clock=pending, CheckCircle=completed).",
+            "preReqs": "CB service config includes at-home-testing.",
+            "whereToLook": "synrgy-app/app/at-home-testing.tsx:66-168",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-77",
+            "text": "Testing info screen renders 4-step flowchart + Mux video",
+            "expected": "Tap Learn More on a kit card. /testing-info loads with the 4-step Order → Collect → Return → Get Results flowchart, a Mux HLS video with play overlay, and a 'Good to Know' tips section.",
+            "preReqs": "On at-home-testing.",
+            "whereToLook": "synrgy-app/app/testing-info.tsx",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-78",
+            "text": "Order test kit — shipping + payment form simulated submission",
+            "expected": "Tap Order Kit. /order-test-kit loads with a shipping form (auto-filled from cbMember) and payment form (card number formatted XXXX XXXX XXXX XXXX, MM/YY expiry, CVC). All fields required. Tap Submit. A 1.5-second loading state appears. A confirmation alert displays the address and kit name. Test note: this is currently a UI-only simulation; no kit will actually ship.",
+            "preReqs": "On a kit card from /at-home-testing.",
+            "whereToLook": "synrgy-app/app/order-test-kit.tsx:86-94",
+            "estimatedMinutes": 6,
+            "notes": "Order submission is a 1.5s setTimeout simulation. No real Stripe/shipping backend exists for this flow."
+          },
+          {
+            "id": "sv-79",
+            "text": "Test results screen with abnormal vs normal split",
+            "expected": "From at-home-testing, tap a completed prior order. /test-results loads. Out-of-range results appear in a section with left red border; normal results in a section with neutral border. Each result can expand for explanation.",
+            "preReqs": "Completed prior order in mock data.",
+            "whereToLook": "synrgy-app/app/test-results.tsx:111-182",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-80",
+            "text": "Test results AI Summary is a hardcoded placeholder (do NOT verify personalization)",
+            "expected": "On /test-results, an 'AI Summary' section appears when out-of-range results exist. The text is currently a hardcoded placeholder analyzing example metrics (glucose, LDL, ApoB), NOT generated from the user's actual results. Tester should verify the section renders, not that the text matches the user's data.",
+            "preReqs": "On a test-results screen with abnormal results.",
+            "whereToLook": "synrgy-app/app/test-results.tsx:145-154",
+            "estimatedMinutes": 3,
+            "notes": "AI Summary is placeholder text in v2.0.0. Personalization is not yet implemented."
+          }
+        ]
+      },
+      {
+        "title": "Insurance Scan + Eligibility",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-81",
+            "text": "Open Insurance Scan — capture, scan, verify flow",
+            "expected": "From the service menu, open insurance scan. The capture state offers Take Photo, Upload Photo, or Manual Entry. Scanning state shows a 'Scanning insurance card…' spinner. Verify state shows a payer search dropdown and member info form pre-filled from getMemberDetails.",
+            "preReqs": "CB service config includes insurance-scan (or app entry point exists).",
+            "whereToLook": "synrgy-app/app/insurance-scan.tsx:177-355",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "sv-82",
+            "text": "Payer search (debounced 200ms) populates dropdown",
+            "expected": "Type a payer name (e.g., 'Aetna'). After ~200ms, a dropdown of matching payers appears. Tap one — it is selected, dropdown closes, CheckCircle icon appears.",
+            "preReqs": "On the verify state of insurance-scan.",
+            "whereToLook": "synrgy-app/app/insurance-scan.tsx:244-289",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-83",
+            "text": "Verify eligibility → /insurance-benefits with eligibility status",
+            "expected": "Fill all fields, tap Verify Eligibility. A 'Verifying…' spinner appears. On success, the app navigates to /insurance-benefits showing eligibility status (green card), plan overview, cost-sharing, remaining-this-year, and copays.",
+            "preReqs": "Valid test payer + member info.",
+            "whereToLook": "synrgy-app/app/insurance-scan.tsx:145-157; synrgy-app/app/insurance-benefits.tsx:86-170",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "sv-84",
+            "text": "Insurance scan failure paths handled",
+            "expected": "Test paths: camera permission denied → alert; OCR fails → alert + return to verify (manual entry); eligibility check fails → alert + return to verify. Each shows actionable messaging.",
+            "preReqs": "Force various failures.",
+            "whereToLook": "synrgy-app/app/insurance-scan.tsx:85-87, 114-116, 159-160",
+            "estimatedMinutes": 5
+          }
+        ]
+      },
+      {
+        "title": "Hospital Indemnity (UI-only claim submission)",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-85",
+            "text": "Open Hospital Indemnity — plan selector + benefit schedule + recent claims",
+            "expected": "Tap Hospital Indemnity from the menu. The landing screen shows a plan selector chiplist, a benefit schedule table mapping insured events to limits and amounts, a 'Submit New Claim' CTA, and up to 3 recent claims (or empty state).",
+            "preReqs": "CB service config includes hospital-indemnity.",
+            "whereToLook": "synrgy-app/app/hospital-indemnity.tsx:39-155",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-86",
+            "text": "View claims history — all claims (no pagination)",
+            "expected": "Tap 'View all claims'. /hi-claims loads with all prior claims (or empty state). Each card shows submitted date, plan, service count, claim total, and status badge (currently 'Submitted' hardcoded).",
+            "preReqs": "On /hospital-indemnity.",
+            "whereToLook": "synrgy-app/app/hi-claims.tsx",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-87",
+            "text": "Open claim detail — member info, line items, documents",
+            "expected": "Tap a claim. /hi-claim-detail loads showing member info card, services line items, claim total, and documents thumbnail grid (if documents exist).",
+            "preReqs": "At least one claim exists.",
+            "whereToLook": "synrgy-app/app/hi-claim-detail.tsx:56-136",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-88",
+            "text": "New claim wizard — demographics + add service entries",
+            "expected": "Tap Submit New Claim. /hi-new-claim loads. Demographics section is read-only from getMemberDetails. Services section has one default entry (description, date of service, provider, amount). Add Entry button creates new entries. Remove button (X) removes entries (cannot remove if only one exists).",
+            "preReqs": "On /hospital-indemnity.",
+            "whereToLook": "synrgy-app/app/hi-new-claim.tsx:229-304",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "sv-89",
+            "text": "New claim wizard — upload documents via camera + gallery",
+            "expected": "Tap Take Photo or Choose Photo. Camera or gallery opens. After capture/selection, the document thumbnail appears in the grid. Tap X to remove a document.",
+            "preReqs": "On hi-new-claim, camera + photo library permission granted.",
+            "whereToLook": "synrgy-app/app/hi-new-claim.tsx:306-362, 117-135",
+            "estimatedMinutes": 5
+          },
+          {
+            "id": "sv-90",
+            "text": "New claim wizard — certification checkbox + signature canvas",
+            "expected": "Check the certification checkbox. Draw a signature on the signature canvas. The Clear button erases it. While drawing, page scroll is locked.",
+            "preReqs": "On hi-new-claim.",
+            "whereToLook": "synrgy-app/app/hi-new-claim.tsx:364-407",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-91",
+            "text": "Submit button gated until canSubmit is satisfied",
+            "expected": "The Submit button is disabled until: all service entries have provider+description+date+amount > 0, at least one document is uploaded, certification is checked, and a signature is drawn. Once all conditions are met, the button activates.",
+            "preReqs": "On hi-new-claim with partial form.",
+            "whereToLook": "synrgy-app/app/hi-new-claim.tsx:97-107, 411",
+            "estimatedMinutes": 4
+          },
+          {
+            "id": "sv-92",
+            "text": "Submit new claim — UI-only success path (no backend POST)",
+            "expected": "Tap Submit Claim. The claim is persisted to the local Zustand store (no backend API call in v2.0.0). A success screen with checkmark, 'Submit another claim', and 'Done' buttons appears. Tester note: nothing is sent to a carrier; this is currently a client-side flow.",
+            "preReqs": "All fields filled, canSubmit true.",
+            "whereToLook": "synrgy-app/app/hi-new-claim.tsx:141-162, 213-226",
+            "estimatedMinutes": 4,
+            "notes": "Claim submission is UI-only — no backend API call. Verify the UI flow, not carrier-side receipt."
+          },
+          {
+            "id": "sv-93",
+            "text": "Compliance — no 'rewards/earn/points/credits' in HI screens",
+            "expected": "Walk through all HI screens (landing, claims list, claim detail, new claim wizard). Confirm no occurrence of 'rewards', 'earn', 'points', 'credits'. Insured events are referenced as 'services' for claim line items.",
+            "preReqs": "General observation across HI flows.",
+            "whereToLook": "Manual scan of hi-*.tsx files",
+            "estimatedMinutes": 5,
+            "failureGuidance": "Hard compliance fail if any prohibited terminology appears."
+          }
+        ]
+      },
+      {
+        "title": "Tax Hotline",
+        "platform": "SYNRGY app",
+        "path": "core",
+        "checks": [
+          {
+            "id": "sv-94",
+            "text": "Open Tax Hotline — feature cards + web portal + phone CTA",
+            "expected": "Tap Tax Hotline from the service menu. The screen shows 5 feature cards (federal filing, bilingual, quick turnaround, unlimited, prep+filing), a 'Visit Web Portal' button, and a 'Call Tax Hotline' button.",
+            "preReqs": "CB service config includes tax-hotline.",
+            "whereToLook": "synrgy-app/app/tax-hotline.tsx:79-112",
+            "estimatedMinutes": 3
+          },
+          {
+            "id": "sv-95",
+            "text": "Visit Web Portal opens https://synrgy.bmdgateway.com in browser",
+            "expected": "Tap Visit Web Portal. An in-app web browser (or external browser) opens to synrgy.bmdgateway.com. Verify the URL is correct.",
+            "preReqs": "On /tax-hotline.",
+            "whereToLook": "synrgy-app/app/tax-hotline.tsx:104-107",
+            "estimatedMinutes": 2
+          },
+          {
+            "id": "sv-96",
+            "text": "Call Tax Hotline opens phone dialer to 844-379-0062",
+            "expected": "Tap Call Tax Hotline. The OS phone dialer opens with tel:18443790062 (display '844-379-0062').",
+            "preReqs": "Native device.",
+            "whereToLook": "synrgy-app/app/tax-hotline.tsx:109-112",
+            "estimatedMinutes": 2
+          }
+        ]
+      }
+    ]
   },
 
   // ─── SCENARIO 9: Member disengagement & recovery ───
   {
-    id: "member-recovery",
-    persona: "Member",
-    icon: "R",
-    color: "#854F0B",
-    bg: "#FAEEDA",
-    title: "App deletion, re-engagement & recovery",
-    summary:
-      "Member deletes the app or revokes permissions. BEEP rescue journey activates. Member re-installs and recovers their data.",
-    steps: [
+    "id": "member-recovery",
+    "persona": "Member",
+    "icon": "R",
+    "color": "#854F0B",
+    "bg": "#FAEEDA",
+    "title": "App deletion, re-engagement & recovery",
+    "summary": "Member deletes the app or revokes specific permissions; verifies that re-installing recovers the account via Synrgy auth + derived-password CB re-auth, and that permission revocation properly disables associated features within the app.",
+    "steps": [
       {
-        title: "Member deletes app",
-        platform: "SYNRGY app + backend",
-        path: "path-c",
-        checks: [
+        "title": "Re-install and recover the account",
+        "platform": "SYNRGY app",
+        "path": "path-c",
+        "checks": [
           {
-            id: "mr-1",
-            text: "After member deletes the app, their account and data are NOT deleted from the backend",
-            expected: "Delete the SYNRGY app from the device. In the admin portal, the member's account still exists. All their data (HRA results, vitals, covered events) is intact. The account was NOT deleted from the backend.",
-            preReqs: "A member with existing data. About to delete the app from the device.",
+            "id": "mr-9",
+            "text": "Re-download the app and log in — existing account recovered",
+            "expected": "After deleting and re-installing the app, open it. Tap Sign In (not Create Account). Enter the original email and password. The app recognizes the existing Synrgy auth account. No new account is created. The Synrgy API also auto-refreshes the CB token via /cb-session using the derived password.",
+            "preReqs": "Account previously existed. App was deleted from device.",
+            "whereToLook": "synrgy-app/app/login.tsx; synrgy-app/services/auth-api.ts (cb-session)",
+            "estimatedMinutes": 5
           },
           {
-            id: "mr-2",
-            text: "Member status changes to reflect inactivity (not terminated)",
-            expected: "In the admin portal, the member's status changes to 'Inactive' (not 'Terminated'). The status change may happen after a configured inactivity threshold, not immediately upon deletion.",
-            preReqs: "Member deleted the app. Check admin portal after the inactivity threshold.",
+            "id": "mr-10",
+            "text": "Previous app-side data is intact post-re-login",
+            "expected": "After re-login, navigate through the app. Verify the following app-side data is present and matches what existed before deletion: HRA results on /hra-results, face scan history on /vitals-scan, VUC visit history on /visits, family on /family. Note: this is app-visible data only; we are not asserting admin-portal state.",
+            "preReqs": "Re-installed app, logged in with original credentials. Member had data before deletion.",
+            "whereToLook": "Cross-screen verification: hra.tsx, vitals-scan.tsx, visits.tsx, family.tsx",
+            "estimatedMinutes": 5,
+            "notes": "App-side verification only. Upstream admin-portal verification is out of scope per Phase 1 decision."
           },
           {
-            id: "mr-3",
-            text: "Health data, HRA results, and covered event history are all preserved",
-            expected: "In the admin portal, navigate to the member's profile. Health data history, HRA results, and all covered events are still visible and complete. No data was purged.",
-            preReqs: "Member deleted the app.",
+            "id": "mr-11",
+            "text": "Re-install on a fresh device re-runs onboarding visuals but CB link is seamless",
+            "expected": "After re-installing on the same device, AsyncStorage is empty so onboarding video and slides may replay (intentional). However, the user does NOT need to re-verify CB membership: the Synrgy API auto-re-authenticates with CB using the derived password during the post-login /cb-session call. The user lands on home without a verify-member step.",
+            "preReqs": "Re-installed app on the same device.",
+            "whereToLook": "synrgy-app/app/_layout.tsx (AuthGate); synrgy-app/services/auth-api.ts; synrgy-app/app/onboarding.tsx:112-118",
+            "estimatedMinutes": 6
           },
           {
-            id: "mr-4",
-            text: "Admin portal shows member as 'Inactive' — not removed from the group",
-            expected: "In the group's member list, the member still appears but with an 'Inactive' status. They are NOT removed from the group roster. The group's member count may show them separately.",
-            preReqs: "Member is inactive after app deletion.",
-          },
-        ],
+            "id": "mr-12",
+            "text": "Device-level permissions are prompted again on a fresh install",
+            "expected": "On re-install, OS-level permissions were lost. During the post-login onboarding flow, the app prompts again for Health, Mic, Camera, Notifications, and Location, in the documented order.",
+            "preReqs": "Re-installed app (fresh OS permissions).",
+            "whereToLook": "synrgy-app/app/onboarding.tsx:175-216",
+            "estimatedMinutes": 5
+          }
+        ]
       },
       {
-        title: "BEEP rescue journey activates",
-        platform: "SMS + email",
-        path: "path-c",
-        checks: [
+        "title": "Permission revocation (without deletion)",
+        "platform": "SYNRGY app",
+        "path": "path-c",
+        "checks": [
           {
-            id: "mr-5",
-            text: "Inactivity triggers BEEP rescue outreach after configured threshold",
-            expected: "After the configured inactivity period (e.g., 7 days, 14 days), the member receives a rescue outreach SMS and/or email. The message encourages re-engagement.",
-            preReqs: "Member has been inactive for the threshold period.",
+            "id": "mr-13",
+            "text": "Revoking Health permission stops Sahha background sync and guidance generation",
+            "expected": "Go to device Settings → SYNRGY → revoke Health Connect (Android) / HealthKit (iOS) permission. Return to the app. Sahha is no longer authenticated. Sahha background sync stops. Over time, new guidance based on Sahha-fed events stops being generated.",
+            "preReqs": "Health permission currently granted. Sahha previously authenticated.",
+            "whereToLook": "synrgy-app/services/sahha.ts; OS health permission",
+            "estimatedMinutes": 5,
+            "notes": "Guidance generation pause is delayed by hours since it's server-side."
           },
           {
-            id: "mr-6",
-            text: "Rescue message includes re-download link and reminder of available benefits",
-            expected: "The rescue message contains: a link to download the app (App Store / Google Play), and a reminder of available benefits and services. The link works.",
-            preReqs: "Rescue outreach message received.",
+            "id": "mr-14",
+            "text": "Revoking Notifications stops push delivery",
+            "expected": "Revoke Notifications in device settings. Push notifications no longer arrive. In-app features (action cards, Orb, etc.) continue working.",
+            "preReqs": "Notifications permission currently granted.",
+            "whereToLook": "OS notification permission",
+            "estimatedMinutes": 4
           },
           {
-            id: "mr-7",
-            text: "Rescue messages follow the configured cadence (not immediately)",
-            expected: "Rescue messages follow a defined cadence (e.g., Day 7, Day 14, Day 21) — not all at once. Check message timestamps to verify the cadence.",
-            preReqs: "Member has been inactive long enough for multiple rescue messages.",
+            "id": "mr-17",
+            "text": "Revoking Camera disables face vitals scan and VUC video",
+            "expected": "Revoke Camera permission. Tap Start Scan on /vitals-scan — the OS prompts again or shows a permission-blocked state. Start a VUC visit — the visit cannot establish the video stream until camera is re-enabled.",
+            "preReqs": "Camera permission currently granted.",
+            "whereToLook": "synrgy-app/app/vitals-scanner.native.tsx; components/tm/TMComponentSlots.tsx:50-67",
+            "estimatedMinutes": 4
           },
           {
-            id: "mr-8",
-            text: "If member has at least one permission still on, SMS/email nudges can still reach them",
-            expected: "If the member has SMS or email permissions still active (even without the app), the rescue messages are delivered. At least one channel reaches them.",
-            preReqs: "Member's contact channels are still active.",
+            "id": "mr-18",
+            "text": "Revoking Microphone disables voice on home Orb",
+            "expected": "Revoke Microphone. Tap the Orb to initiate voice. The OS prompts again or shows a blocked state. The voice session cannot start.",
+            "preReqs": "Microphone permission currently granted.",
+            "whereToLook": "synrgy-app/app/index.tsx (useSynrgyVoice)",
+            "estimatedMinutes": 3
           },
-        ],
+          {
+            "id": "mr-16",
+            "text": "Re-enabling a previously revoked permission activates the feature immediately",
+            "expected": "Re-enable any previously revoked permission in device settings. Return to the app. The associated feature works again without restarting the app.",
+            "preReqs": "Just re-enabled a permission.",
+            "whereToLook": "OS reactive permission model",
+            "estimatedMinutes": 3
+          }
+        ]
       },
       {
-        title: "Member re-installs & recovers",
-        platform: "SYNRGY app",
-        path: "path-c",
-        checks: [
+        "title": "Logout vs delete distinction",
+        "platform": "SYNRGY app",
+        "path": "path-c",
+        "checks": [
           {
-            id: "mr-9",
-            text: "Re-downloading and logging in recovers the existing account (not a new one)",
-            expected: "Re-download the SYNRGY app. Log in with the original credentials. The app recognizes the existing account — it does NOT create a new account. Your name and profile are intact.",
-            preReqs: "App was previously deleted. Re-downloading now.",
+            "id": "mr-19",
+            "text": "Logout clears all tokens and routes to onboarding auth-choice step",
+            "expected": "From the service menu, tap Log Out. The app calls signOut(), deauthenticates Sahha, clears AsyncStorage tokens, and routes to /onboarding step 4 (auth choice). All cached user data is gone from the app instance.",
+            "preReqs": "Logged in.",
+            "whereToLook": "synrgy-app/context/AuthContext.tsx (logout); synrgy-app/services/token.ts",
+            "estimatedMinutes": 3
           },
           {
-            id: "mr-10",
-            text: "All previous data is intact: HRA results, vitals history, covered events",
-            expected: "After re-login, navigate to HRA results, Vitals history, and any covered event records. All previously recorded data is present and matches what was there before deletion.",
-            preReqs: "Re-installed app, logged in with original credentials.",
-          },
-          {
-            id: "mr-11",
-            text: "Member does NOT have to redo onboarding or HRA",
-            expected: "After re-login, the app takes you directly to the home screen — NOT back to the onboarding carousel or HRA prompt (if already completed). Previously completed steps are remembered.",
-            preReqs: "Re-installed app, logged in.",
-          },
-          {
-            id: "mr-12",
-            text: "Permissions prompt fires again for any previously revoked permissions",
-            expected: "Since the app was re-installed, device-level permissions need to be re-granted. The app prompts for permissions that were previously granted but lost due to re-installation.",
-            preReqs: "Re-installed app, logging in.",
-          },
-        ],
-      },
-      {
-        title: "Permission revocation (without app deletion)",
-        platform: "SYNRGY app",
-        path: "path-c",
-        checks: [
-          {
-            id: "mr-13",
-            text: "Revoking health data permission stops vitals sync and behavioral insights",
-            expected: "Go to device Settings → SYNRGY → revoke Health Data permission. Return to the app. Vitals section no longer syncs new data. Behavioral insights based on health data are no longer generated.",
-            preReqs: "Health data permission currently granted. App is installed and active.",
-          },
-          {
-            id: "mr-14",
-            text: "Revoking notification permission stops push nudges",
-            expected: "Go to device Settings → SYNRGY → revoke Notification permission. Push notifications from SYNRGY no longer appear. In-app features continue to work normally.",
-            preReqs: "Notification permission currently granted.",
-          },
-          {
-            id: "mr-15",
-            text: "BEEP can still reach the member via SMS/email if those channels are still available",
-            expected: "Even with app permissions revoked, BEEP outreach via SMS and email still reaches the member (these are not app permissions). Verify by triggering a BEEP message.",
-            preReqs: "App permissions revoked. SMS/email channels still active for the member.",
-          },
-          {
-            id: "mr-16",
-            text: "Re-enabling permissions reactivates features immediately (no restart needed)",
-            expected: "Go to device Settings → SYNRGY → re-enable the revoked permission. Return to the app immediately (without restarting). The associated feature (vitals sync, notifications) starts working again without a restart.",
-            preReqs: "A permission was just revoked.",
-          },
-        ],
-      },
-    ],
+            "id": "mr-20",
+            "text": "Re-login after logout on same device is seamless (no re-onboard, no re-verify-member)",
+            "expected": "After logout, log back in on the same device with the same credentials. The app lands on home directly. AsyncStorage @synrgy:onboarding_complete persists so onboarding is skipped. /cb-session call re-authenticates CB transparently. No verify-member screen appears.",
+            "preReqs": "Just logged out on a device where onboarding was completed.",
+            "whereToLook": "synrgy-app/app/_layout.tsx (AuthGate); synrgy-app/services/auth-api.ts (cb-session)",
+            "estimatedMinutes": 4
+          }
+        ]
+      }
+    ]
   },
 
   // ─── SCENARIO 10: Data flows upstream — all dashboards ───
